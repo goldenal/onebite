@@ -46,6 +46,11 @@ let AuthController = class AuthController {
         });
         return { success: true, username: user.username, role: 'kitchen', token, message: 'Login successful' };
     }
+    // Public admin credential creation (dev only). Do not use in production.
+    async seedAdmin(body) {
+        const user = await this.auth.createAdminUser(body.username, body.password);
+        return { success: true, username: user.username, role: user.role };
+    }
     // Public kitchen credential creation (dev only). Do not use in production.
     async seedKitchen(body) {
         const user = await this.auth.createKitchenUser(body.username, body.password);
@@ -83,6 +88,13 @@ __decorate([
     __metadata("design:paramtypes", [login_dto_1.LoginDto, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "kitchenLogin", null);
+__decorate([
+    (0, common_1.Post)('admin/seed'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [create_staff_dto_1.CreateStaffDto]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "seedAdmin", null);
 __decorate([
     (0, common_1.Post)('kitchen/seed'),
     __param(0, (0, common_1.Body)()),

@@ -49,6 +49,15 @@ let AuthService = class AuthService {
         });
         return { username: user.username, role: 'kitchen' };
     }
+    async createAdminUser(username, password) {
+        const hash = bcryptjs_1.default.hashSync(password, 10);
+        const user = await this.prisma.staffUser.upsert({
+            where: { username },
+            update: { passwordHash: hash, role: 'admin' },
+            create: { username, passwordHash: hash, role: 'admin' },
+        });
+        return { username: user.username, role: 'admin' };
+    }
     getAuthCookieName() {
         return this.config.get('AUTH_COOKIE_NAME') || 'bck_auth';
     }
