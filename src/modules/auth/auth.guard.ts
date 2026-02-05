@@ -84,6 +84,7 @@ export class RoleGuard implements CanActivate {
     const req = context.switchToHttp().getRequest<Request>();
     const user = (req as any).user as AuthPayload | undefined;
     if (!user) throw new UnauthorizedException('Unauthorized');
+    if (user.role === 'admin') return true;
     if (user.role !== this.role) throw new UnauthorizedException('Unauthorized');
     return true;
   }

@@ -111,6 +111,8 @@ class RoleGuard {
         const user = req.user;
         if (!user)
             throw new common_1.UnauthorizedException('Unauthorized');
+        if (user.role === 'admin')
+            return true;
         if (user.role !== this.role)
             throw new common_1.UnauthorizedException('Unauthorized');
         return true;
