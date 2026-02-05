@@ -32,7 +32,7 @@ let StaffController = class StaffController {
         const secret = this.config.get('JWT_SECRET');
         if (!secret)
             throw new common_1.UnauthorizedException('JWT_SECRET is required');
-        const token = (0, auth_util_1.signStaffToken)(secret, this.auth.getStaffCookieMaxAge());
+        const token = (0, auth_util_1.signStaffToken)(secret, this.config.get('AUTH_TOKEN_TTL') || '24h');
         return { success: true, token };
     }
     verify(req, res) {

@@ -19,7 +19,7 @@ export class StaffController {
     const secret = this.config.get<string>('JWT_SECRET');
     if (!secret) throw new UnauthorizedException('JWT_SECRET is required');
 
-    const token = signStaffToken(secret, this.auth.getStaffCookieMaxAge());
+    const token = signStaffToken(secret, this.config.get('AUTH_TOKEN_TTL') || '24h');
     return { success: true, token };
   }
 
