@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { MenuService } from './menu.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
@@ -24,18 +24,21 @@ export class MenuController {
 
   @Post()
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async create(@Body() body: CreateMenuItemDto) {
     return this.menu.createMenuItem(body);
   }
 
   @Put(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async update(@Param('id') id: string, @Body() body: UpdateMenuItemDto) {
     return this.menu.updateMenuItem(id, body);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async remove(@Param('id') id: string) {
     return this.menu.deleteMenuItem(id);
   }

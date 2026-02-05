@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, Req, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Request } from 'express';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
@@ -19,6 +19,7 @@ export class ReviewsController {
 
   @Get()
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async listAdmin() {
     return this.reviews.listAdmin();
   }
@@ -40,36 +41,42 @@ export class ReviewsController {
 
   @Put(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async update(@Param('id') id: string, @Body() body: UpdateReviewDto) {
     return this.reviews.update(id, body);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async remove(@Param('id') id: string) {
     return this.reviews.remove(id);
   }
 
   @Get('admin/conversations')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async adminConversations() {
     return this.reviews.adminConversations();
   }
 
   @Get('admin/unread-count')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async adminUnreadCount() {
     return this.reviews.adminUnreadCount();
   }
 
   @Put('admin/:id/mark-read')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async adminMarkRead(@Param('id') id: string) {
     return this.reviews.adminMarkRead(id);
   }
 
   @Get('admin/:id/conversation')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async adminConversation(@Param('id') id: string) {
     return this.reviews.adminConversation(id);
   }
@@ -81,18 +88,21 @@ export class ReviewsController {
 
   @Get(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async get(@Param('id') id: string) {
     return this.reviews.get(id);
   }
 
   @Get(':id/replies')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async listReplies(@Param('id') id: string) {
     return this.reviews.listReplies(id);
   }
 
   @Post(':id/replies')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async createReply(@Param('id') id: string, @Body() body: CreateReplyDto) {
     return this.reviews.createReply(id, body);
   }
@@ -105,6 +115,7 @@ export class ReviewsController {
 
   @Delete(':reviewId/replies/:replyId')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async deleteReply(@Param('reviewId') reviewId: string, @Param('replyId') replyId: string) {
     return this.reviews.deleteReply(reviewId, replyId);
   }

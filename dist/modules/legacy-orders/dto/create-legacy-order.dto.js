@@ -10,20 +10,33 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateLegacyOrderDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class CreateLegacyOrderDto {
 }
 exports.CreateLegacyOrderDto = CreateLegacyOrderDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({
+        example: [
+            { id: 'menu_1', name: 'Jerk Chicken Plate', price: 18.5, quantity: 1 },
+            { id: 'menu_2', name: 'Plantains', price: 6, quantity: 2 },
+        ],
+    }),
+    __metadata("design:type", Object)
+], CreateLegacyOrderDto.prototype, "items", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 30.5 }),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], CreateLegacyOrderDto.prototype, "total", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Pat Smith' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateLegacyOrderDto.prototype, "customerName", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '+1-415-555-0199' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

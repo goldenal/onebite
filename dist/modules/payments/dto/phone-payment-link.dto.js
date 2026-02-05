@@ -10,25 +10,39 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PhonePaymentLinkDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class PhonePaymentLinkDto {
 }
 exports.PhonePaymentLinkDto = PhonePaymentLinkDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({
+        example: [
+            { id: 'menu_1', name: 'Jerk Chicken Plate', price: 18.5, quantity: 1 },
+            { id: 'menu_2', name: 'Plantains', price: 6, quantity: 2 },
+        ],
+    }),
+    __metadata("design:type", Object)
+], PhonePaymentLinkDto.prototype, "items", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 30.5 }),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], PhonePaymentLinkDto.prototype, "amount", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Pat Smith' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], PhonePaymentLinkDto.prototype, "customerName", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '+1-415-555-0199' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], PhonePaymentLinkDto.prototype, "customerPhone", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'pickup' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

@@ -87,6 +87,7 @@ exports.ReviewsController = ReviewsController;
 __decorate([
     (0, common_1.Get)(),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -114,6 +115,7 @@ __decorate([
 __decorate([
     (0, common_1.Put)(':id'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -123,6 +125,7 @@ __decorate([
 __decorate([
     (0, common_1.Delete)(':id'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -131,6 +134,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)('admin/conversations'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -138,6 +142,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)('admin/unread-count'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -145,6 +150,7 @@ __decorate([
 __decorate([
     (0, common_1.Put)('admin/:id/mark-read'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -153,6 +159,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)('admin/:id/conversation'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -167,6 +174,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)(':id'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -175,6 +183,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)(':id/replies'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),
@@ -183,6 +192,7 @@ __decorate([
 __decorate([
     (0, common_1.Post)(':id/replies'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -202,6 +212,7 @@ __decorate([
 __decorate([
     (0, common_1.Delete)(':reviewId/replies/:replyId'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('reviewId')),
     __param(1, (0, common_1.Param)('replyId')),
     __metadata("design:type", Function),

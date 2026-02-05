@@ -62,6 +62,7 @@ let StaffController = class StaffController {
 exports.StaffController = StaffController;
 __decorate([
     (0, common_1.Post)('access'),
+    (0, swagger_1.ApiBody)({ schema: { example: { code: '123456' } } }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -69,6 +70,7 @@ __decorate([
 ], StaffController.prototype, "access", null);
 __decorate([
     (0, common_1.Get)('verify'),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Res)()),
     __metadata("design:type", Function),

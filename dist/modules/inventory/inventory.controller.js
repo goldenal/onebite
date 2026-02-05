@@ -56,6 +56,7 @@ __decorate([
 __decorate([
     (0, common_1.Post)(),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [create_inventory_dto_1.CreateInventoryDto]),
@@ -64,6 +65,7 @@ __decorate([
 __decorate([
     (0, common_1.Put)(':itemId'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('itemId')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -73,6 +75,7 @@ __decorate([
 __decorate([
     (0, common_1.Delete)(':itemId'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('itemId')),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [String]),

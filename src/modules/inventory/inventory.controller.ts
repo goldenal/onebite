@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { InventoryService } from './inventory.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
@@ -22,18 +22,21 @@ export class InventoryController {
 
   @Post()
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async create(@Body() body: CreateInventoryDto) {
     return this.inventory.create(body);
   }
 
   @Put(':itemId')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async update(@Param('itemId') itemId: string, @Body() body: UpdateInventoryDto) {
     return this.inventory.update(itemId, body);
   }
 
   @Delete(':itemId')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async remove(@Param('itemId') itemId: string) {
     return this.inventory.remove(itemId);
   }

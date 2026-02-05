@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { GroupOrdersService } from './group-orders.service';
 import { CreateGroupOrderDto } from './dto/create-group-order.dto';
 import { AddGroupItemDto } from './dto/add-group-item.dto';
@@ -13,6 +13,7 @@ export class GroupOrdersController {
 
   @Get()
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async listAdmin() {
     return this.groupOrders.listAdmin();
   }
@@ -39,6 +40,7 @@ export class GroupOrdersController {
 
   @Put(':id/status')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async updateStatus(@Param('id') id: string, @Body() body: UpdateGroupStatusDto) {
     return this.groupOrders.updateStatus(id, body);
   }

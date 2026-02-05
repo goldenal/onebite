@@ -1,5 +1,5 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { KitchenService } from '../kitchen/kitchen.service';
 
@@ -10,6 +10,8 @@ export class AgentController {
 
   @Post('confirm_payment')
   @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiBody({ schema: { example: { cart_id: 'cart_123' } } })
   async confirmPayment(@Body() body: { cart_id?: string }) {
     const cartId = body?.cart_id;
     if (!cartId) return { error: 'bad_request', message: 'cart_id required' };
@@ -20,6 +22,8 @@ export class AgentController {
 
   @Post('generate_pickup_code')
   @UseGuards(AuthGuard)
+  @ApiBearerAuth('bearer')
+  @ApiBody({ schema: { example: { order_id: 'ord_12345' } } })
   async generatePickup(@Body() body: { order_id?: string }) {
     const orderId = body?.order_id;
     if (!orderId) return { error: 'bad_request', message: 'order_id required' };

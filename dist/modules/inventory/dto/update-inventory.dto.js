@@ -10,31 +10,37 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateInventoryDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class UpdateInventoryDto {
 }
 exports.UpdateInventoryDto = UpdateInventoryDto;
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 25 }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], UpdateInventoryDto.prototype, "currentStock", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 5 }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], UpdateInventoryDto.prototype, "minStock", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 100 }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], UpdateInventoryDto.prototype, "maxStock", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'plates' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateInventoryDto.prototype, "unit", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: true }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)

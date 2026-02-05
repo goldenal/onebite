@@ -10,20 +10,24 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentLinkDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class PaymentLinkDto {
 }
 exports.PaymentLinkDto = PaymentLinkDto;
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'user_123' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], PaymentLinkDto.prototype, "user_id", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'ord_12345' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], PaymentLinkDto.prototype, "order_id", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 42.75 }),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], PaymentLinkDto.prototype, "amount", void 0);

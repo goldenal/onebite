@@ -85,6 +85,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)('admin/verify'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Res)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -93,6 +94,7 @@ __decorate([
 __decorate([
     (0, common_1.Get)('kitchen/verify'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.KitchenGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Res)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

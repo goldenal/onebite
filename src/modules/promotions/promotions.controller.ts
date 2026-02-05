@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { PromotionsService } from './promotions.service';
 import { CreatePromotionDto } from './dto/create-promotion.dto';
 import { UpdatePromotionDto } from './dto/update-promotion.dto';
@@ -12,6 +12,7 @@ export class PromotionsController {
 
   @Get()
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async list() {
     return this.promotions.list();
   }
@@ -28,18 +29,21 @@ export class PromotionsController {
 
   @Post()
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async create(@Body() body: CreatePromotionDto) {
     return this.promotions.create(body);
   }
 
   @Put(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async update(@Param('id') id: string, @Body() body: UpdatePromotionDto) {
     return this.promotions.update(id, body);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async remove(@Param('id') id: string) {
     return this.promotions.remove(id);
   }

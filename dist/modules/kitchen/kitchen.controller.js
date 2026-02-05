@@ -219,6 +219,7 @@ __decorate([
 __decorate([
     (0, common_1.Post)('orders/:id/refire'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
+    (0, swagger_1.ApiBody)({ schema: { example: { items: ['item_1'], reason: 'Overcooked' } } }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -228,6 +229,15 @@ __decorate([
 __decorate([
     (0, common_1.Post)('orders/:id/edit'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
+    (0, swagger_1.ApiBody)({
+        schema: {
+            example: {
+                items: [{ name: 'Jerk Chicken Plate', qty: 1, modifiers: ['Mild'], allergies: [], station: 'grill' }],
+                priority_flag: false,
+                prep_estimate_minutes: 20,
+            },
+        },
+    }),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
@@ -237,6 +247,7 @@ __decorate([
 __decorate([
     (0, common_1.Post)('manual'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
+    (0, swagger_1.ApiBody)({ schema: { example: { order_id: 'ord_manual_1', items: [{ name: 'Plantains', qty: 2 }] } } }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -251,6 +262,7 @@ __decorate([
 ], KitchenController.prototype, "demo", null);
 exports.KitchenController = KitchenController = __decorate([
     (0, swagger_1.ApiTags)('kitchen'),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     (0, common_1.Controller)('kitchen'),
     __metadata("design:paramtypes", [kitchen_service_1.KitchenService])
 ], KitchenController);

@@ -10,21 +10,25 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateReservationDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class UpdateReservationDto {
 }
 exports.UpdateReservationDto = UpdateReservationDto;
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'confirmed' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateReservationDto.prototype, "status", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Customer requested later time.' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateReservationDto.prototype, "notes", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Window seat if available.' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

@@ -10,11 +10,13 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateGroupOrderDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class CreateGroupOrderDto {
 }
 exports.CreateGroupOrderDto = CreateGroupOrderDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Alex' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateGroupOrderDto.prototype, "initiatorName", void 0);

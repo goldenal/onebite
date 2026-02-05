@@ -40,6 +40,8 @@ exports.AgentController = AgentController;
 __decorate([
     (0, common_1.Post)('confirm_payment'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
+    (0, swagger_1.ApiBody)({ schema: { example: { cart_id: 'cart_123' } } }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -48,6 +50,8 @@ __decorate([
 __decorate([
     (0, common_1.Post)('generate_pickup_code'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
+    (0, swagger_1.ApiBody)({ schema: { example: { order_id: 'ord_12345' } } }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

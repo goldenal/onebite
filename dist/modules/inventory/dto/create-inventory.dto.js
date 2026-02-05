@@ -10,39 +10,47 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateInventoryDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class CreateInventoryDto {
 }
 exports.CreateInventoryDto = CreateInventoryDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'menu_1' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateInventoryDto.prototype, "itemId", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Jerk Chicken Plate' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateInventoryDto.prototype, "itemName", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 25 }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], CreateInventoryDto.prototype, "currentStock", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 5 }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], CreateInventoryDto.prototype, "minStock", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 100 }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], CreateInventoryDto.prototype, "maxStock", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'plates' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateInventoryDto.prototype, "unit", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: true }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsBoolean)(),
     __metadata("design:type", Boolean)

@@ -1,5 +1,5 @@
 import { Body, Controller, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiTags } from '@nestjs/swagger';
 import { TabletService } from './tablet.service';
 
 @ApiTags('tablet')
@@ -8,6 +8,7 @@ export class TabletController {
   constructor(private readonly tablet: TabletService) {}
 
   @Post('activity')
+  @ApiBody({ schema: { example: { tabletId: 'tab_1', sessionId: 'sess_1', activityType: 'menu_view' } } })
   async activity(@Body() body: { tabletId: string; sessionId?: string; activityType?: string }) {
     const result = await this.tablet.touchSession({ tabletId: body.tabletId.trim() });
     return {
@@ -25,6 +26,7 @@ export class TabletController {
   }
 
   @Post('order-status')
+  @ApiBody({ schema: { example: { tabletId: 'tab_1', sessionId: 'sess_1', orderStatus: 'submitted' } } })
   async orderStatus(@Body() body: { tabletId: string; sessionId?: string; orderStatus: string }) {
     const status = this.tablet.normalizeOrderStatus(body.orderStatus);
     if (!status) return { error: 'invalid_order_status' };

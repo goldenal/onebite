@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
@@ -11,6 +11,7 @@ export class StaffController {
   constructor(private readonly auth: AuthService, private readonly config: ConfigService) {}
 
   @Post('access')
+  @ApiBody({ schema: { example: { code: '123456' } } })
   access(@Body() body: { code: string }) {
     const portalCode = this.auth.getStaffPortalCode();
     if (!portalCode) throw new UnauthorizedException('staff_code_not_configured');
@@ -24,6 +25,7 @@ export class StaffController {
   }
 
   @Get('verify')
+  @ApiBearerAuth('bearer')
   verify(@Req() req: Request, @Res() res: Response) {
     const portalCode = this.auth.getStaffPortalCode();
     if (!portalCode) return res.status(500).json({ ok: false });

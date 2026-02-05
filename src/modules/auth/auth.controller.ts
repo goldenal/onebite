@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -41,12 +41,14 @@ export class AuthController {
 
   @Get('admin/verify')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   adminVerify(@Res() res: Response) {
     res.json({ valid: true });
   }
 
   @Get('kitchen/verify')
   @UseGuards(AuthGuard, KitchenGuard())
+  @ApiBearerAuth('bearer')
   kitchenVerify(@Res() res: Response) {
     res.json({ valid: true });
   }

@@ -34,6 +34,14 @@ async function bootstrap() {
     .setTitle('Bite Creole API')
     .setDescription('NestJS rewrite (dev)')
     .setVersion('0.1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+      'bearer',
+    )
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);

@@ -10,24 +10,29 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeliveryWebhookDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class DeliveryWebhookDto {
 }
 exports.DeliveryWebhookDto = DeliveryWebhookDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'ord_12345' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], DeliveryWebhookDto.prototype, "order_id", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'delivered' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], DeliveryWebhookDto.prototype, "status", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '2026-02-05T19:45:00Z' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], DeliveryWebhookDto.prototype, "eta", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'del_67890' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

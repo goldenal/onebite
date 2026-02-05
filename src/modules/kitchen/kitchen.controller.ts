@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { KitchenService } from './kitchen.service';
 import { KitchenAccessGuard } from '../auth/auth.guard';
 
 @ApiTags('kitchen')
+@ApiBearerAuth('bearer')
 @Controller('kitchen')
 export class KitchenController {
   constructor(private readonly kitchen: KitchenService) {}
@@ -93,12 +94,22 @@ export class KitchenController {
 
   @Post('orders/:id/refire')
   @UseGuards(KitchenAccessGuard)
+  @ApiBody({ schema: { example: { items: ['item_1'], reason: 'Overcooked' } } })
   async refire(@Param('id') id: string, @Body() body: { items?: string[]; reason?: string }) {
     return this.kitchen.refire(id, body?.items, body?.reason);
   }
 
   @Post('orders/:id/edit')
   @UseGuards(KitchenAccessGuard)
+  @ApiBody({
+    schema: {
+      example: {
+        items: [{ name: 'Jerk Chicken Plate', qty: 1, modifiers: ['Mild'], allergies: [], station: 'grill' }],
+        priority_flag: false,
+        prep_estimate_minutes: 20,
+      },
+    },
+  })
   async edit(
     @Param('id') id: string,
     @Body() body: { items: any[]; priority_flag?: boolean; prep_estimate_minutes?: number | null },
@@ -124,6 +135,7 @@ export class KitchenController {
 
   @Post('manual')
   @UseGuards(KitchenAccessGuard)
+  @ApiBody({ schema: { example: { order_id: 'ord_manual_1', items: [{ name: 'Plantains', qty: 2 }] } } })
   async manual(@Body() body: any) {
     return this.kitchen.manualCreate(body || {});
   }

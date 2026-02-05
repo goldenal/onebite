@@ -50,6 +50,7 @@ exports.GroupOrdersController = GroupOrdersController;
 __decorate([
     (0, common_1.Get)(),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", []),
     __metadata("design:returntype", Promise)
@@ -87,6 +88,7 @@ __decorate([
 __decorate([
     (0, common_1.Put)(':id/status'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
+    (0, swagger_1.ApiBearerAuth)('bearer'),
     __param(0, (0, common_1.Param)('id')),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),

@@ -10,35 +10,43 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateReservationDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class CreateReservationDto {
 }
 exports.CreateReservationDto = CreateReservationDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Sam Taylor' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReservationDto.prototype, "name", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'sam@example.com' }),
     (0, class_validator_1.IsEmail)(),
     __metadata("design:type", String)
 ], CreateReservationDto.prototype, "email", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: '+1-415-555-0123' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReservationDto.prototype, "phone", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: '4' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReservationDto.prototype, "guests", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: '2026-02-14' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReservationDto.prototype, "date", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: '19:30' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReservationDto.prototype, "time", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Window seat if available.' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

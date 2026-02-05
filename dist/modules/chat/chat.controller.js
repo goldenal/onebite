@@ -30,6 +30,7 @@ let ChatController = class ChatController {
 exports.ChatController = ChatController;
 __decorate([
     (0, common_1.Post)(),
+    (0, swagger_1.ApiBody)({ schema: { example: { message: "What are today's specials?", sessionId: 'sess_1', tabletId: 'tab_1' } } }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -37,6 +38,7 @@ __decorate([
 ], ChatController.prototype, "chats", null);
 __decorate([
     (0, common_1.Post)('reset'),
+    (0, swagger_1.ApiBody)({ schema: { example: { tabletId: 'tab_1' } } }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

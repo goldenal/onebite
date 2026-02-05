@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { LegacyOrdersService } from './legacy-orders.service';
 import { CreateLegacyOrderDto } from './dto/create-legacy-order.dto';
 import { UpdateLegacyOrderDto } from './dto/update-legacy-order.dto';
@@ -12,12 +12,14 @@ export class LegacyOrdersController {
 
   @Get()
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async list() {
     return this.orders.list();
   }
 
   @Get(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async get(@Param('id') id: string) {
     return this.orders.get(id);
   }
@@ -29,12 +31,14 @@ export class LegacyOrdersController {
 
   @Put(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async update(@Param('id') id: string, @Body() body: UpdateLegacyOrderDto) {
     return this.orders.update(id, body);
   }
 
   @Delete(':id')
   @UseGuards(AuthGuard, AdminGuard())
+  @ApiBearerAuth('bearer')
   async remove(@Param('id') id: string) {
     return this.orders.remove(id);
   }

@@ -10,27 +10,33 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CreateReviewDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class CreateReviewDto {
 }
 exports.CreateReviewDto = CreateReviewDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Jane Doe' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReviewDto.prototype, "name", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'jane@example.com' }),
     (0, class_validator_1.IsEmail)(),
     __metadata("design:type", String)
 ], CreateReviewDto.prototype, "email", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 5 }),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], CreateReviewDto.prototype, "rating", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Great food and friendly staff.' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReviewDto.prototype, "review", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Birthday' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

@@ -60,6 +60,7 @@ let TabletController = class TabletController {
 exports.TabletController = TabletController;
 __decorate([
     (0, common_1.Post)('activity'),
+    (0, swagger_1.ApiBody)({ schema: { example: { tabletId: 'tab_1', sessionId: 'sess_1', activityType: 'menu_view' } } }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
@@ -67,6 +68,7 @@ __decorate([
 ], TabletController.prototype, "activity", null);
 __decorate([
     (0, common_1.Post)('order-status'),
+    (0, swagger_1.ApiBody)({ schema: { example: { tabletId: 'tab_1', sessionId: 'sess_1', orderStatus: 'submitted' } } }),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),

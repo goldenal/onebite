@@ -10,28 +10,40 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AddGroupItemDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class AddGroupItemDto {
 }
 exports.AddGroupItemDto = AddGroupItemDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Taylor' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], AddGroupItemDto.prototype, "participantName", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({
+        example: { id: 'menu_1', name: 'Jerk Chicken Plate', price: 18.5, image: 'https://cdn.example.com/menu/jerk.jpg' },
+    }),
+    __metadata("design:type", Object)
+], AddGroupItemDto.prototype, "menuItem", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 1 }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsNumber)(),
     __metadata("design:type", Number)
 ], AddGroupItemDto.prototype, "quantity", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: { name: 'Spice Level', value: 'Hot' } }),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Object)
 ], AddGroupItemDto.prototype, "selectedVariation", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: [{ name: 'Sides', values: ['Fries'] }] }),
     (0, class_validator_1.IsOptional)(),
     __metadata("design:type", Object)
 ], AddGroupItemDto.prototype, "selectedOptions", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'No onions, please.' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

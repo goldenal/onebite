@@ -10,19 +10,23 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MarkReadDto = exports.MyReviewsDto = exports.RequestAccessDto = exports.CreatePublicReplyDto = exports.CreateReplyDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class CreateReplyDto {
 }
 exports.CreateReplyDto = CreateReplyDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'admin' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReplyDto.prototype, "senderType", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Ava Manager' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReplyDto.prototype, "senderName", void 0);
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Thanks for the feedback!' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreateReplyDto.prototype, "message", void 0);
@@ -30,15 +34,18 @@ class CreatePublicReplyDto {
 }
 exports.CreatePublicReplyDto = CreatePublicReplyDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Thanks for reaching out.' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreatePublicReplyDto.prototype, "message", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'rev_9f2a31' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], CreatePublicReplyDto.prototype, "accessToken", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'John Doe' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -47,6 +54,7 @@ class RequestAccessDto {
 }
 exports.RequestAccessDto = RequestAccessDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'guest@example.com' }),
     (0, class_validator_1.IsEmail)(),
     __metadata("design:type", String)
 ], RequestAccessDto.prototype, "email", void 0);
@@ -54,10 +62,12 @@ class MyReviewsDto {
 }
 exports.MyReviewsDto = MyReviewsDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'guest@example.com' }),
     (0, class_validator_1.IsEmail)(),
     __metadata("design:type", String)
 ], MyReviewsDto.prototype, "email", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'rev_9f2a31' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
@@ -66,10 +76,12 @@ class MarkReadDto {
 }
 exports.MarkReadDto = MarkReadDto;
 __decorate([
+    (0, swagger_1.ApiProperty)({ example: 'customer' }),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], MarkReadDto.prototype, "senderType", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'rev_9f2a31' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)

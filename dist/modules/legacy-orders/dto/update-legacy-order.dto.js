@@ -10,21 +10,25 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.UpdateLegacyOrderDto = void 0;
+const swagger_1 = require("@nestjs/swagger");
 const class_validator_1 = require("class-validator");
 class UpdateLegacyOrderDto {
 }
 exports.UpdateLegacyOrderDto = UpdateLegacyOrderDto;
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'fulfilled' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateLegacyOrderDto.prototype, "status", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Pat Smith' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
 ], UpdateLegacyOrderDto.prototype, "customerName", void 0);
 __decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '+1-415-555-0199' }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
     __metadata("design:type", String)
