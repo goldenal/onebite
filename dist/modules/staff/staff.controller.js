@@ -23,7 +23,7 @@ let StaffController = class StaffController {
         this.auth = auth;
         this.config = config;
     }
-    access(body, res) {
+    access(body) {
         const portalCode = this.auth.getStaffPortalCode();
         if (!portalCode)
             throw new common_1.UnauthorizedException('staff_code_not_configured');
@@ -33,13 +33,7 @@ let StaffController = class StaffController {
         if (!secret)
             throw new common_1.UnauthorizedException('JWT_SECRET is required');
         const token = (0, auth_util_1.signStaffToken)(secret, this.auth.getStaffCookieMaxAge());
-        (0, auth_util_1.setCookie)(res, this.auth.getStaffCookieName(), token, {
-            maxAge: this.auth.getStaffCookieMaxAge(),
-            sameSite: this.auth.getCookieSameSite(),
-            secure: this.auth.getCookieSecure(),
-            domain: this.auth.getCookieDomain() || undefined,
-        });
-        return { success: true };
+        return { success: true, token };
     }
     verify(req, res) {
         const portalCode = this.auth.getStaffPortalCode();
@@ -48,11 +42,11 @@ let StaffController = class StaffController {
         const secret = this.config.get('JWT_SECRET');
         if (!secret)
             return res.status(500).json({ ok: false });
-        const cookie = (0, auth_util_1.parseCookie)(req.headers.cookie, this.auth.getStaffCookieName());
-        if (!cookie)
+        const token = (0, auth_util_1.getBearerToken)(req);
+        if (!token)
             return res.status(401).json({ ok: false });
         try {
-            const ok = (0, auth_util_1.verifyStaffToken)(cookie, secret);
+            const ok = (0, auth_util_1.verifyStaffToken)(token, secret);
             if (!ok)
                 return res.status(401).json({ ok: false });
             return res.json({ ok: true });
@@ -61,12 +55,7 @@ let StaffController = class StaffController {
             return res.status(401).json({ ok: false });
         }
     }
-    logout(res) {
-        (0, auth_util_1.clearCookie)(res, this.auth.getStaffCookieName(), {
-            sameSite: this.auth.getCookieSameSite(),
-            secure: this.auth.getCookieSecure(),
-            domain: this.auth.getCookieDomain() || undefined,
-        });
+    logout() {
         return { success: true };
     }
 };
@@ -74,9 +63,8 @@ exports.StaffController = StaffController;
 __decorate([
     (0, common_1.Post)('access'),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], StaffController.prototype, "access", null);
 __decorate([
@@ -89,9 +77,8 @@ __decorate([
 ], StaffController.prototype, "verify", null);
 __decorate([
     (0, common_1.Post)('logout'),
-    __param(0, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], StaffController.prototype, "logout", null);
 exports.StaffController = StaffController = __decorate([

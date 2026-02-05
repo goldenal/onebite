@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { AuthService, type AuthPayload } from './auth.service';
-import { getBearerToken, parseCookie, toAuthPayload } from './auth.util';
+import { getBearerToken, toAuthPayload } from './auth.util';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -10,7 +10,7 @@ export class AuthGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
-    const token = getBearerToken(req) || parseCookie(req.headers.cookie, this.auth.getAuthCookieName());
+    const token = getBearerToken(req);
     if (!token) throw new UnauthorizedException('Unauthorized');
 
     try {
@@ -30,7 +30,7 @@ export class OptionalAuthGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
-    const token = getBearerToken(req) || parseCookie(req.headers.cookie, this.auth.getAuthCookieName());
+    const token = getBearerToken(req);
     if (!token) return true;
 
     try {
@@ -50,9 +50,7 @@ export class KitchenAccessGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<Request>();
     const token =
-      getBearerToken(req) ||
-      parseCookie(req.headers.cookie, this.auth.getAuthCookieName()) ||
-      (req.query.token as string);
+      getBearerToken(req) || (typeof req.query.token === 'string' ? req.query.token : null);
 
     if (token) {
       try {

@@ -20,7 +20,7 @@ let AuthGuard = class AuthGuard {
     }
     canActivate(context) {
         const req = context.switchToHttp().getRequest();
-        const token = (0, auth_util_1.getBearerToken)(req) || (0, auth_util_1.parseCookie)(req.headers.cookie, this.auth.getAuthCookieName());
+        const token = (0, auth_util_1.getBearerToken)(req);
         if (!token)
             throw new common_1.UnauthorizedException('Unauthorized');
         try {
@@ -46,7 +46,7 @@ let OptionalAuthGuard = class OptionalAuthGuard {
     }
     canActivate(context) {
         const req = context.switchToHttp().getRequest();
-        const token = (0, auth_util_1.getBearerToken)(req) || (0, auth_util_1.parseCookie)(req.headers.cookie, this.auth.getAuthCookieName());
+        const token = (0, auth_util_1.getBearerToken)(req);
         if (!token)
             return true;
         try {
@@ -72,9 +72,7 @@ let KitchenAccessGuard = class KitchenAccessGuard {
     }
     canActivate(context) {
         const req = context.switchToHttp().getRequest();
-        const token = (0, auth_util_1.getBearerToken)(req) ||
-            (0, auth_util_1.parseCookie)(req.headers.cookie, this.auth.getAuthCookieName()) ||
-            req.query.token;
+        const token = (0, auth_util_1.getBearerToken)(req) || (typeof req.query.token === 'string' ? req.query.token : null);
         if (token) {
             try {
                 const payload = (0, auth_util_1.toAuthPayload)(this.auth.verifyToken(token));

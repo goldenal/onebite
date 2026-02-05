@@ -51,36 +51,6 @@ export class AuthService {
     return { username: user.username, role: 'admin' as const };
   }
 
-  getAuthCookieName() {
-    return this.config.get<string>('AUTH_COOKIE_NAME') || 'bck_auth';
-  }
-
-  getAuthCookieMaxAge() {
-    const raw = this.config.get<string>('AUTH_COOKIE_MAX_AGE');
-    return raw ? Number(raw) : 60 * 60 * 24;
-  }
-
-  getStaffCookieName() {
-    return this.config.get<string>('STAFF_COOKIE_NAME') || 'bck_staff';
-  }
-
-  getStaffCookieMaxAge() {
-    const raw = this.config.get<string>('STAFF_COOKIE_MAX_AGE');
-    return raw ? Number(raw) : 60 * 60 * 8;
-  }
-
-  getCookieSameSite() {
-    return (this.config.get<string>('COOKIE_SAMESITE') || 'Lax').trim();
-  }
-
-  getCookieSecure() {
-    return this.config.get<string>('COOKIE_SECURE') === 'true';
-  }
-
-  getCookieDomain() {
-    return (this.config.get<string>('COOKIE_DOMAIN') || '').trim();
-  }
-
   getStaffPortalCode() {
     return (this.config.get<string>('STAFF_PORTAL_CODE') || '').trim();
   }

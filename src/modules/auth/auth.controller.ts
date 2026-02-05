@@ -5,7 +5,6 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { AuthGuard, AdminGuard, KitchenGuard } from './auth.guard';
-import { clearCookie, setCookie } from './auth.util';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -13,28 +12,16 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Post('admin/login')
-  async adminLogin(@Body() body: LoginDto, @Res({ passthrough: true }) res: Response) {
+  async adminLogin(@Body() body: LoginDto) {
     const user = await this.auth.loginWithRole('admin', body.username, body.password);
     const token = this.auth.signToken({ username: user.username, role: 'admin' });
-    setCookie(res, this.auth.getAuthCookieName(), token, {
-      maxAge: this.auth.getAuthCookieMaxAge(),
-      sameSite: this.auth.getCookieSameSite(),
-      secure: this.auth.getCookieSecure(),
-      domain: this.auth.getCookieDomain() || undefined,
-    });
     return { success: true, username: user.username, role: 'admin', token, message: 'Login successful' };
   }
 
   @Post('kitchen/login')
-  async kitchenLogin(@Body() body: LoginDto, @Res({ passthrough: true }) res: Response) {
+  async kitchenLogin(@Body() body: LoginDto) {
     const user = await this.auth.loginWithRole('kitchen', body.username, body.password);
     const token = this.auth.signToken({ username: user.username, role: 'kitchen' });
-    setCookie(res, this.auth.getAuthCookieName(), token, {
-      maxAge: this.auth.getAuthCookieMaxAge(),
-      sameSite: this.auth.getCookieSameSite(),
-      secure: this.auth.getCookieSecure(),
-      domain: this.auth.getCookieDomain() || undefined,
-    });
     return { success: true, username: user.username, role: 'kitchen', token, message: 'Login successful' };
   }
 
@@ -65,12 +52,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  logout(@Res({ passthrough: true }) res: Response) {
-    clearCookie(res, this.auth.getAuthCookieName(), {
-      sameSite: this.auth.getCookieSameSite(),
-      secure: this.auth.getCookieSecure(),
-      domain: this.auth.getCookieDomain() || undefined,
-    });
+  logout() {
     return { success: true, message: 'Logged out' };
   }
 }

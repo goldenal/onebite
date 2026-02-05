@@ -19,31 +19,18 @@ const auth_service_1 = require("./auth.service");
 const login_dto_1 = require("./dto/login.dto");
 const create_staff_dto_1 = require("./dto/create-staff.dto");
 const auth_guard_1 = require("./auth.guard");
-const auth_util_1 = require("./auth.util");
 let AuthController = class AuthController {
     constructor(auth) {
         this.auth = auth;
     }
-    async adminLogin(body, res) {
+    async adminLogin(body) {
         const user = await this.auth.loginWithRole('admin', body.username, body.password);
         const token = this.auth.signToken({ username: user.username, role: 'admin' });
-        (0, auth_util_1.setCookie)(res, this.auth.getAuthCookieName(), token, {
-            maxAge: this.auth.getAuthCookieMaxAge(),
-            sameSite: this.auth.getCookieSameSite(),
-            secure: this.auth.getCookieSecure(),
-            domain: this.auth.getCookieDomain() || undefined,
-        });
         return { success: true, username: user.username, role: 'admin', token, message: 'Login successful' };
     }
-    async kitchenLogin(body, res) {
+    async kitchenLogin(body) {
         const user = await this.auth.loginWithRole('kitchen', body.username, body.password);
         const token = this.auth.signToken({ username: user.username, role: 'kitchen' });
-        (0, auth_util_1.setCookie)(res, this.auth.getAuthCookieName(), token, {
-            maxAge: this.auth.getAuthCookieMaxAge(),
-            sameSite: this.auth.getCookieSameSite(),
-            secure: this.auth.getCookieSecure(),
-            domain: this.auth.getCookieDomain() || undefined,
-        });
         return { success: true, username: user.username, role: 'kitchen', token, message: 'Login successful' };
     }
     // Public admin credential creation (dev only). Do not use in production.
@@ -62,12 +49,7 @@ let AuthController = class AuthController {
     kitchenVerify(res) {
         res.json({ valid: true });
     }
-    logout(res) {
-        (0, auth_util_1.clearCookie)(res, this.auth.getAuthCookieName(), {
-            sameSite: this.auth.getCookieSameSite(),
-            secure: this.auth.getCookieSecure(),
-            domain: this.auth.getCookieDomain() || undefined,
-        });
+    logout() {
         return { success: true, message: 'Logged out' };
     }
 };
@@ -75,17 +57,15 @@ exports.AuthController = AuthController;
 __decorate([
     (0, common_1.Post)('admin/login'),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [login_dto_1.LoginDto, Object]),
+    __metadata("design:paramtypes", [login_dto_1.LoginDto]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "adminLogin", null);
 __decorate([
     (0, common_1.Post)('kitchen/login'),
     __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [login_dto_1.LoginDto, Object]),
+    __metadata("design:paramtypes", [login_dto_1.LoginDto]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "kitchenLogin", null);
 __decorate([
@@ -120,9 +100,8 @@ __decorate([
 ], AuthController.prototype, "kitchenVerify", null);
 __decorate([
     (0, common_1.Post)('logout'),
-    __param(0, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", []),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "logout", null);
 exports.AuthController = AuthController = __decorate([
