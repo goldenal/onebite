@@ -9,9 +9,95 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.CartCreateDto = void 0;
+exports.CartCreateDto = exports.CartItemDto = exports.CartMenuItemDto = void 0;
 const swagger_1 = require("@nestjs/swagger");
+const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
+class CartMenuItemDto {
+}
+exports.CartMenuItemDto = CartMenuItemDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: '7c44f4ef-404f-42dd-963b-52c2d87099f6' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CartMenuItemDto.prototype, "id", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'Whole Wing' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CartMenuItemDto.prototype, "name", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'Crispy deep-fried whole chicken wing with your choice of sauce.' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CartMenuItemDto.prototype, "description", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 2.35 }),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], CartMenuItemDto.prototype, "price", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'a-la-carte' }),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CartMenuItemDto.prototype, "category", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: 'https://images.unsplash.com/photo-1608039755401-742074f0548d?w=800&q=80' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CartMenuItemDto.prototype, "image", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: [] }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    __metadata("design:type", Array)
+], CartMenuItemDto.prototype, "dietary", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: true }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsBoolean)(),
+    __metadata("design:type", Boolean)
+], CartMenuItemDto.prototype, "popular", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: [] }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    __metadata("design:type", Array)
+], CartMenuItemDto.prototype, "variations", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: [] }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    __metadata("design:type", Array)
+], CartMenuItemDto.prototype, "optionGroups", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: [] }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    __metadata("design:type", Array)
+], CartMenuItemDto.prototype, "includes", void 0);
+__decorate([
+    (0, swagger_1.ApiPropertyOptional)({ example: '' }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    __metadata("design:type", String)
+], CartMenuItemDto.prototype, "notes", void 0);
+class CartItemDto {
+}
+exports.CartItemDto = CartItemDto;
+__decorate([
+    (0, swagger_1.ApiProperty)({ type: CartMenuItemDto }),
+    (0, class_validator_1.ValidateNested)(),
+    (0, class_transformer_1.Type)(() => CartMenuItemDto),
+    __metadata("design:type", CartMenuItemDto)
+], CartItemDto.prototype, "menuItem", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 1 }),
+    (0, class_validator_1.IsNumber)(),
+    __metadata("design:type", Number)
+], CartItemDto.prototype, "quantity", void 0);
 class CartCreateDto {
 }
 exports.CartCreateDto = CartCreateDto;
@@ -22,13 +108,11 @@ __decorate([
     __metadata("design:type", String)
 ], CartCreateDto.prototype, "user_id", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({
-        example: [
-            { id: 'menu_1', name: 'Jerk Chicken Plate', price: 18.5, quantity: 1 },
-            { id: 'menu_2', name: 'Plantains', price: 6, quantity: 2 },
-        ],
-    }),
-    __metadata("design:type", Object)
+    (0, swagger_1.ApiProperty)({ type: [CartItemDto] }),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ValidateNested)({ each: true }),
+    (0, class_transformer_1.Type)(() => CartItemDto),
+    __metadata("design:type", Array)
 ], CartCreateDto.prototype, "items", void 0);
 __decorate([
     (0, swagger_1.ApiProperty)({ example: 30.5 }),
@@ -36,14 +120,16 @@ __decorate([
     __metadata("design:type", Number)
 ], CartCreateDto.prototype, "amount", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: 'pickup' }),
+    (0, swagger_1.ApiProperty)({ example: 'pickup', enum: ['pickup', 'delivery', 'tablet'] }),
     (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsEnum)(['pickup', 'delivery', 'tablet']),
     __metadata("design:type", String)
 ], CartCreateDto.prototype, "fulfillment", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ example: 'web' }),
+    (0, swagger_1.ApiPropertyOptional)({ example: 'web', enum: ['web', 'phone', 'tablet'] }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
+    (0, class_validator_1.IsEnum)(['web', 'phone', 'tablet']),
     __metadata("design:type", String)
 ], CartCreateDto.prototype, "channel", void 0);
 __decorate([
