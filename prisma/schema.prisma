@@ -1,0 +1,301 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Order {
+  id                  String      @id @db.Text
+  channel             String      @db.Text
+  fulfillment         String      @db.Text
+  sourceLabel         String?     @map("source_label") @db.Text
+  status              String      @db.Text
+  arrivalStatus       String      @map("arrival_status") @db.Text
+  pickupCode          String?     @map("pickup_code") @db.Text
+  paidAt              DateTime    @map("paid_at") @db.Timestamptz(6)
+  createdAt           DateTime    @map("created_at") @db.Timestamptz(6)
+  startedAt           DateTime?   @map("started_at") @db.Timestamptz(6)
+  readyAt             DateTime?   @map("ready_at") @db.Timestamptz(6)
+  servedAt            DateTime?   @map("served_at") @db.Timestamptz(6)
+  deliveredAt         DateTime?   @map("delivered_at") @db.Timestamptz(6)
+  prepEstimateMinutes Int?        @map("prep_estimate_minutes")
+  priorityFlag        Boolean?    @map("priority_flag")
+
+  items OrderItem[]
+  audit AuditEntry[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   String  @map("order_id") @db.Text
+  name      String? @db.Text
+  qty       Int?
+  modifiers Json?
+  allergies Json?
+  station   String? @db.Text
+  notes     String? @db.Text
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("order_items")
+}
+
+model AuditEntry {
+  id      Int     @id @default(autoincrement())
+  orderId String  @map("order_id") @db.Text
+  ts      DateTime @db.Timestamptz(6)
+  actor   String? @db.Text
+  action  String? @db.Text
+  details Json?
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("audit")
+}
+
+model ProcessedEvent {
+  eventId String @id @map("event_id") @db.Text
+  source  String? @db.Text
+
+  @@map("processed_events")
+}
+
+model MenuItem {
+  id           String   @id @db.Text
+  name         String   @db.Text
+  description  String?  @db.Text
+  price        Decimal?
+  category     String?  @db.Text
+  image        String?  @db.Text
+  dietary      Json?    @default("[]")
+  popular      Boolean? @default(false)
+  variations   Json?    @default("[]")
+  optionGroups Json?    @default("[]") @map("option_groups")
+  includes     Json?    @default("[]")
+  notes        String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("menu_items")
+}
+
+model InventoryItem {
+  itemId        String   @id @map("item_id") @db.Text
+  itemName      String   @map("item_name") @db.Text
+  currentStock  Int?     @map("current_stock")
+  minStock      Int?     @map("min_stock")
+  maxStock      Int?     @map("max_stock")
+  unit          String?  @db.Text
+  status        String?  @db.Text
+  autoReorder   Boolean? @map("auto_reorder")
+  lastRestocked DateTime? @map("last_restocked") @db.Timestamptz(6)
+
+  @@map("inventory")
+}
+
+model Setting {
+  key       String   @id @db.Text
+  value     Json
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("settings")
+}
+
+model StaffUser {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique @db.Text
+  passwordHash String   @map("password_hash") @db.Text
+  role         String   @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("staff_users")
+}
+
+model Admin {
+  id       Int    @id @default(autoincrement())
+  username String @unique @db.Text
+  password String @db.Text
+
+  @@map("admin")
+}
+
+model Session {
+  token     String @id @db.Text
+  createdAt BigInt @map("created_at")
+  expiresAt BigInt @map("expires_at")
+
+  @@map("sessions")
+}
+
+model Reservation {
+  id              String  @id @db.Text
+  name            String  @db.Text
+  email           String  @db.Text
+  phone           String  @db.Text
+  guests          String  @db.Text
+  date            String  @db.Text
+  time            String  @db.Text
+  specialRequests String? @map("special_requests") @db.Text
+  status          String? @db.Text
+  notes           String? @db.Text
+  createdAt       BigInt  @map("created_at")
+
+  @@map("reservations")
+}
+
+model CustomerReview {
+  id         String  @id @db.Text
+  name       String? @db.Text
+  email      String? @db.Text
+  rating     Int?
+  review     String? @db.Text
+  occasion   String? @db.Text
+  date       String? @db.Text
+  approved   Boolean?
+  visible    Boolean?
+  adminNotes String? @map("admin_notes") @db.Text
+  createdAt  BigInt? @map("created_at")
+
+  replies ReviewReply[]
+
+  @@map("customer_reviews")
+}
+
+model ReviewReply {
+  id         String  @id @db.Text
+  reviewId   String  @map("review_id") @db.Text
+  senderType String? @map("sender_type") @db.Text
+  senderName String? @map("sender_name") @db.Text
+  message    String? @db.Text
+  isRead     Boolean? @map("is_read")
+  createdAt  BigInt? @map("created_at")
+
+  review CustomerReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@map("review_replies")
+}
+
+model ReviewAccessToken {
+  email           String   @id @db.Text
+  accessToken     String   @map("access_token") @db.Text
+  expiresAt       DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastRequestedAt DateTime @default(now()) @map("last_requested_at") @db.Timestamptz(6)
+
+  @@map("review_access_tokens")
+}
+
+model Promotion {
+  id                  String   @id @db.Text
+  name                String?  @db.Text
+  description         String?  @db.Text
+  type                String?  @db.Text
+  value               Decimal?
+  applicableItems     Json?    @default("[]") @map("applicable_items")
+  applicableCategories Json?   @default("[]") @map("applicable_categories")
+  startDate           String?  @map("start_date") @db.Text
+  endDate             String?  @map("end_date") @db.Text
+  active              Boolean?
+  code                String?  @db.Text
+  minimumPurchase     Decimal? @map("minimum_purchase")
+  maxUses             Int?     @map("max_uses")
+  currentUses         Int?     @map("current_uses")
+  daysOfWeek           Json?   @default("[]") @map("days_of_week")
+  timeStart           String?  @map("time_start") @db.Text
+  timeEnd             String?  @map("time_end") @db.Text
+  createdAt           BigInt?  @map("created_at")
+
+  @@map("promotions")
+}
+
+model GroupOrder {
+  id           String  @id @db.Text
+  initiatorName String? @map("initiator_name") @db.Text
+  status       String? @db.Text
+  createdAt    BigInt? @map("created_at")
+  expiresAt    BigInt? @map("expires_at")
+
+  items GroupOrderItem[]
+
+  @@map("group_orders")
+}
+
+model GroupOrderItem {
+  id                 String  @id @db.Text
+  groupOrderId       String  @map("group_order_id") @db.Text
+  participantName    String? @map("participant_name") @db.Text
+  menuItemId         String? @map("menu_item_id") @db.Text
+  menuItemName       String? @map("menu_item_name") @db.Text
+  menuItemPrice      Decimal? @map("menu_item_price")
+  menuItemImage      String? @map("menu_item_image") @db.Text
+  quantity           Int?
+  selectedVariation  Json?   @map("selected_variation")
+  selectedOptions    Json?   @map("selected_options")
+  specialInstructions String? @map("special_instructions") @db.Text
+  createdAt          BigInt? @map("created_at")
+
+  groupOrder GroupOrder @relation(fields: [groupOrderId], references: [id], onDelete: Cascade)
+
+  @@map("group_order_items")
+}
+
+model LegacyOrder {
+  id           String  @id @db.Text
+  items        Json?
+  total        Decimal?
+  status       String? @db.Text
+  customerName String? @map("customer_name") @db.Text
+  customerPhone String? @map("customer_phone") @db.Text
+  estimatedTime Int?   @map("estimated_time")
+  timestamp    BigInt?
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("legacy_orders")
+}
+
+model PaymentLink {
+  orderId      String   @id @map("order_id") @db.Text
+  userId       String?  @map("user_id") @db.Text
+  amount       Decimal?
+  state        String?  @db.Text
+  paymentLink  String?  @map("payment_link") @db.Text
+  fulfillment  String?  @db.Text
+  channel      String?  @db.Text
+  items        Json?
+  customerName String?  @map("customer_name") @db.Text
+  customerPhone String? @map("customer_phone") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("payment_links")
+}
+
+model DeliveryRequest {
+  orderId  String  @id @map("order_id") @db.Text
+  provider String? @db.Text
+  deliveryId String? @map("delivery_id") @db.Text
+  status   String? @db.Text
+  eta      String? @db.Text
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("delivery_requests")
+}
+
+model TabletSession {
+  tabletId             String   @id @map("tablet_id") @db.Text
+  sessionId            String   @map("session_id") @db.Text
+  questionCount        Int      @default(0) @map("question_count")
+  lastActivityTimestamp DateTime @map("last_activity_timestamp") @db.Timestamptz(6)
+  orderStatus          String   @default("NONE") @map("order_status") @db.Text
+  warningSent          Boolean  @default(false) @map("warning_sent")
+  agentConversationId  String?  @map("agent_conversation_id") @db.Text
+  conversationHistory  Json?    @default("[]") @map("conversation_history")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("tablet_sessions")
+}
