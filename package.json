@@ -5,8 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "build": "nest build",
-  "start": "node dist/main.js",
-  "start:dev": "nest start --watch",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
     "prisma:generate": "prisma generate",
@@ -34,6 +34,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.16",
     "@types/bcryptjs": "^2.4.6",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.6",
