@@ -30,6 +30,7 @@ const webhooks_module_1 = require("./modules/webhooks/webhooks.module");
 const tablet_module_1 = require("./modules/tablet/tablet.module");
 const chat_module_1 = require("./modules/chat/chat.module");
 const voice_module_1 = require("./modules/voice/voice.module");
+const locations_module_1 = require("./modules/locations/locations.module");
 const log_body_interceptor_1 = require("./common/interceptors/log-body.interceptor");
 const core_1 = require("@nestjs/core");
 let AppModule = class AppModule {
@@ -67,6 +68,7 @@ exports.AppModule = AppModule = __decorate([
             group_orders_module_1.GroupOrdersModule,
             payments_module_1.PaymentsModule,
             delivery_module_1.DeliveryModule,
+            locations_module_1.LocationsModule,
             legacy_orders_module_1.LegacyOrdersModule,
             kitchen_module_1.KitchenModule,
             agent_module_1.AgentModule,

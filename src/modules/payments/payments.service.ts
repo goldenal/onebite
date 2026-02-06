@@ -1,14 +1,22 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CartCreateDto } from './dto/cart-create.dto';
 import { PaymentLinkDto } from './dto/payment-link.dto';
 import { PhonePaymentLinkDto } from './dto/phone-payment-link.dto';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import Stripe from 'stripe';
+import { CheckoutSessionDto } from './dto/checkout-session.dto';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {}
+  private stripe: Stripe;
+
+  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {
+    this.stripe = new Stripe(this.config.get<string>('STRIPE_SECRET_KEY') || '', {
+      apiVersion: '2023-10-16',
+    });
+  }
 
   async createCart(dto: CartCreateDto) {
     const order_id = `ord_${randomUUID()}`;
@@ -81,7 +89,7 @@ export class PaymentsService {
         amount: dto.amount,
         fulfillment: dto.fulfillment || 'pickup',
         channel: 'phone',
-        items: dto.items ?? [],
+        items: (dto.items as any) ?? [],
         customerName: dto.customerName ?? null,
         customerPhone: dto.customerPhone ?? null,
         state: 'AWAITING_PAYMENT',
@@ -93,7 +101,7 @@ export class PaymentsService {
         state: 'AWAITING_PAYMENT',
         fulfillment: dto.fulfillment || 'pickup',
         channel: 'phone',
-        items: dto.items ?? [],
+        items: (dto.items as any) ?? [],
         customerName: dto.customerName ?? null,
         customerPhone: dto.customerPhone ?? null,
       },
@@ -121,5 +129,106 @@ export class PaymentsService {
     });
 
     return { order_id, payment_link, state: 'AWAITING_PAYMENT' };
+  }
+
+  async createCheckoutSession(dto: CheckoutSessionDto) {
+    const payment = await this.prisma.paymentLink.findUnique({ where: { orderId: dto.order_id } });
+    if (!payment) throw new NotFoundException('order_not_found');
+
+    const items = Array.isArray(payment.items) ? (payment.items as any[]) : [];
+    let currency = 'usd';
+    let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
+
+    if (items.length) {
+      lineItems = items
+        .map((item) => {
+          const name = item?.menuItem?.name || item?.name || 'Item';
+          const unitAmount = Math.round(Number(item?.menuItem?.price ?? item?.price ?? 0) * 100);
+          const quantity = Number(item?.quantity || item?.qty || 1);
+          if (!unitAmount || unitAmount <= 0) return null;
+          return {
+            price_data: {
+              currency,
+              product_data: { name },
+              unit_amount: unitAmount,
+            },
+            quantity,
+          };
+        })
+        .filter(Boolean) as Stripe.Checkout.SessionCreateParams.LineItem[];
+    }
+
+    if (!lineItems.length) {
+      const fallbackAmount = Number(payment.amount || 0);
+      if (!fallbackAmount) throw new BadRequestException('amount_required');
+      lineItems = [
+        {
+          price_data: {
+            currency,
+            product_data: { name: 'Order' },
+            unit_amount: Math.round(fallbackAmount * 100),
+          },
+          quantity: 1,
+        },
+      ];
+    }
+
+    if (payment.fulfillment === 'delivery') {
+      const quote = await (this.prisma as any).deliveryQuote.findUnique({ where: { orderId: dto.order_id } });
+      if (!quote) throw new BadRequestException('delivery_quote_required');
+      if (dto.quote_id && dto.quote_id !== quote.quoteId) throw new BadRequestException('quote_mismatch');
+      if (quote.expiresAt && quote.expiresAt.getTime() < Date.now()) throw new BadRequestException('quote_expired');
+
+      currency = quote.currency ? quote.currency.toLowerCase() : currency;
+      lineItems = lineItems.map((li) => ({
+        ...li,
+        price_data: li.price_data ? { ...li.price_data, currency } : li.price_data,
+      }));
+      lineItems.push({
+        price_data: {
+          currency,
+          product_data: { name: 'Delivery Fee' },
+          unit_amount: Math.max(0, quote.feeCents || 0),
+        },
+        quantity: 1,
+      });
+
+      const subtotal = lineItems.reduce((sum, li) => sum + (li.price_data?.unit_amount || 0) * (li.quantity || 1), 0);
+      await this.prisma.paymentLink.update({
+        where: { orderId: dto.order_id },
+        data: { amount: subtotal / 100, updatedAt: new Date() },
+      });
+    }
+
+    const customerUrl =
+      this.config.get<string>('CUSTOMER_URL') || this.config.get<string>('FRONTEND_URL') || 'http://localhost:5173';
+    const successUrl = `${customerUrl}/checkout/success?order_id=${dto.order_id}`;
+    const cancelUrl = `${customerUrl}/checkout/cancel?order_id=${dto.order_id}`;
+
+    const session = await this.stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: lineItems,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      client_reference_id: dto.order_id,
+      payment_intent_data: {
+        metadata: {
+          order_id: dto.order_id,
+          channel: payment.channel || 'web',
+          fulfillment: payment.fulfillment || 'pickup',
+          items: JSON.stringify(payment.items ?? []),
+          customer_name: payment.customerName || '',
+          customer_phone: payment.customerPhone || '',
+          quote_id: dto.quote_id || '',
+        },
+      },
+    });
+
+    await this.prisma.paymentLink.update({
+      where: { orderId: dto.order_id },
+      data: { paymentLink: session.url || null, state: 'AWAITING_PAYMENT', updatedAt: new Date() },
+    });
+
+    return { order_id: dto.order_id, session_id: session.id, payment_link: session.url, state: 'AWAITING_PAYMENT' };
   }
 }

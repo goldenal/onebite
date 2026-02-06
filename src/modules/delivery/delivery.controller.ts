@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { DeliveryService } from './delivery.service';
 import { DeliveryRequestDto } from './dto/delivery-request.dto';
+import { DeliveryQuoteDto } from './dto/delivery-quote.dto';
 import { DeliveryWebhookDto } from './dto/delivery-webhook.dto';
 
 @ApiTags('delivery')
@@ -12,6 +13,11 @@ export class DeliveryController {
   @Post('request')
   async request(@Body() body: DeliveryRequestDto) {
     return this.delivery.request(body);
+  }
+
+  @Post('quote')
+  async quote(@Body() body: DeliveryQuoteDto) {
+    return this.delivery.quote(body);
   }
 
   @Post('webhook')

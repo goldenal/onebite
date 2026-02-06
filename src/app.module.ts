@@ -21,6 +21,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TabletModule } from './modules/tablet/tablet.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { VoiceModule } from './modules/voice/voice.module';
+import { LocationsModule } from './modules/locations/locations.module';
 import { LogBodyInterceptor } from './common/interceptors/log-body.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 
@@ -55,6 +56,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
     GroupOrdersModule,
     PaymentsModule,
     DeliveryModule,
+    LocationsModule,
     LegacyOrdersModule,
     KitchenModule,
     AgentModule,

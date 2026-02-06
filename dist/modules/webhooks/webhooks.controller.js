@@ -23,11 +23,14 @@ const config_1 = require("@nestjs/config");
 const kitchen_service_1 = require("../kitchen/kitchen.service");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const client_1 = require("@prisma/client");
+const crypto_1 = require("crypto");
+const delivery_service_1 = require("../delivery/delivery.service");
 let WebhooksController = class WebhooksController {
-    constructor(config, kitchen, prisma) {
+    constructor(config, kitchen, prisma, delivery) {
         this.config = config;
         this.kitchen = kitchen;
         this.prisma = prisma;
+        this.delivery = delivery;
         this.stripe = new stripe_1.default(this.config.get('STRIPE_SECRET_KEY') || '', {
             apiVersion: '2023-10-16',
         });
@@ -85,6 +88,7 @@ let WebhooksController = class WebhooksController {
                         : { ts: now, actor: 'system', action: 'order_created' },
                 ],
             };
+            let createdEvent = false;
             await this.prisma.$transaction(async (tx) => {
                 await tx.paymentLink.updateMany({ where: { orderId: id }, data: { state: 'PAID', updatedAt: new Date() } });
                 let created = false;
@@ -102,12 +106,74 @@ let WebhooksController = class WebhooksController {
                 }
                 if (!created)
                     return;
+                createdEvent = true;
                 await this.kitchen.upsertOrderWithItemsTx(tx, order);
             });
+            if (createdEvent && fulfillment === 'delivery') {
+                try {
+                    await this.delivery.createDeliveryAfterPayment(id);
+                }
+                catch {
+                    // delivery creation failure should not fail webhook
+                }
+            }
         }
         return res.json({ received: true });
     }
     async deliveryWebhook(req, res) {
+        const uberSignature = req.headers['x-uber-signature'] ||
+            req.headers['x-postmates-signature'] ||
+            undefined;
+        if (uberSignature) {
+            const secret = this.config.get('UBER_DIRECT_WEBHOOK_SECRET');
+            if (!secret) {
+                return res.status(500).json({ error: 'server_not_configured', message: 'UBER_DIRECT_WEBHOOK_SECRET required' });
+            }
+            const rawBody = req.rawBody;
+            if (!rawBody)
+                return res.status(400).json({ error: 'invalid_signature' });
+            const computed = (0, crypto_1.createHmac)('sha256', secret).update(rawBody).digest('hex');
+            if (computed !== uberSignature)
+                return res.status(400).json({ error: 'invalid_signature' });
+            const payload = req.body || {};
+            const data = payload.data || payload;
+            const deliveryId = data.delivery_id || data.id || payload.delivery_id;
+            let orderId = data.external_id || data.order_id || payload.order_id || payload.order_ref;
+            const status = data.status || payload.status;
+            const eta = data.dropoff_eta || data.eta || null;
+            if (!orderId && deliveryId) {
+                const row = await this.prisma.deliveryRequest.findFirst({ where: { deliveryId } });
+                orderId = row?.orderId;
+            }
+            if (!orderId || !status)
+                return res.status(400).json({ error: 'bad_request' });
+            await this.prisma.deliveryRequest.upsert({
+                where: { orderId },
+                update: {
+                    provider: 'uber_direct',
+                    deliveryId: deliveryId || null,
+                    status,
+                    eta,
+                    updatedAt: new Date(),
+                },
+                create: {
+                    orderId,
+                    provider: 'uber_direct',
+                    deliveryId: deliveryId || null,
+                    status,
+                    eta,
+                },
+            });
+            const event = this.mapUberStatusToEvent(status);
+            if (event) {
+                await this.kitchen.updateDelivery(orderId, event, {
+                    status,
+                    eta,
+                    courier: data.courier || null,
+                });
+            }
+            return res.json({ ok: true });
+        }
         const token = this.config.get('DELIVERY_WEBHOOK_TOKEN');
         if (token && req.headers.authorization !== `Bearer ${token}`) {
             return res.status(401).json({ error: 'unauthorized' });
@@ -118,6 +184,16 @@ let WebhooksController = class WebhooksController {
         }
         await this.kitchen.updateDelivery(payload.order_ref, payload.event, payload.driver_status);
         return res.json({ ok: true });
+    }
+    mapUberStatusToEvent(status) {
+        const normalized = status.toLowerCase();
+        if (['pickup', 'pickup_complete', 'enroute_to_dropoff', 'dropoff'].includes(normalized))
+            return 'picked_up';
+        if (['delivered', 'dropoff_complete'].includes(normalized))
+            return 'delivered';
+        if (['canceled', 'cancelled', 'returned'].includes(normalized))
+            return 'canceled';
+        return null;
     }
     safeJson(value, fallback) {
         try {
@@ -151,5 +227,6 @@ exports.WebhooksController = WebhooksController = __decorate([
     (0, common_1.Controller)('webhooks'),
     __metadata("design:paramtypes", [config_1.ConfigService,
         kitchen_service_1.KitchenService,
-        prisma_service_1.PrismaService])
+        prisma_service_1.PrismaService,
+        delivery_service_1.DeliveryService])
 ], WebhooksController);

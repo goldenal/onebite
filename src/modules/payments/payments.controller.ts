@@ -4,6 +4,7 @@ import { PaymentsService } from './payments.service';
 import { CartCreateDto } from './dto/cart-create.dto';
 import { PaymentLinkDto } from './dto/payment-link.dto';
 import { PhonePaymentLinkDto } from './dto/phone-payment-link.dto';
+import { CheckoutSessionDto } from './dto/checkout-session.dto';
 
 @ApiTags('payments')
 @Controller()
@@ -28,5 +29,10 @@ export class PaymentsController {
   @Post('phone/payment-link')
   async phonePaymentLink(@Body() body: PhonePaymentLinkDto) {
     return this.payments.phonePaymentLink(body);
+  }
+
+  @Post('payments/checkout-session')
+  async createCheckoutSession(@Body() body: CheckoutSessionDto) {
+    return this.payments.createCheckoutSession(body);
   }
 }

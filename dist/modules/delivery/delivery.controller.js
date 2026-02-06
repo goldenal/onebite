@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const delivery_service_1 = require("./delivery.service");
 const delivery_request_dto_1 = require("./dto/delivery-request.dto");
+const delivery_quote_dto_1 = require("./dto/delivery-quote.dto");
 const delivery_webhook_dto_1 = require("./dto/delivery-webhook.dto");
 let DeliveryController = class DeliveryController {
     constructor(delivery) {
@@ -24,6 +25,9 @@ let DeliveryController = class DeliveryController {
     }
     async request(body) {
         return this.delivery.request(body);
+    }
+    async quote(body) {
+        return this.delivery.quote(body);
     }
     async webhook(body) {
         return this.delivery.webhook(body);
@@ -40,6 +44,13 @@ __decorate([
     __metadata("design:paramtypes", [delivery_request_dto_1.DeliveryRequestDto]),
     __metadata("design:returntype", Promise)
 ], DeliveryController.prototype, "request", null);
+__decorate([
+    (0, common_1.Post)('quote'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [delivery_quote_dto_1.DeliveryQuoteDto]),
+    __metadata("design:returntype", Promise)
+], DeliveryController.prototype, "quote", null);
 __decorate([
     (0, common_1.Post)('webhook'),
     __param(0, (0, common_1.Body)()),

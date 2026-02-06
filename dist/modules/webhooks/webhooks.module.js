@@ -10,12 +10,13 @@ exports.WebhooksModule = void 0;
 const common_1 = require("@nestjs/common");
 const webhooks_controller_1 = require("./webhooks.controller");
 const kitchen_module_1 = require("../kitchen/kitchen.module");
+const delivery_module_1 = require("../delivery/delivery.module");
 let WebhooksModule = class WebhooksModule {
 };
 exports.WebhooksModule = WebhooksModule;
 exports.WebhooksModule = WebhooksModule = __decorate([
     (0, common_1.Module)({
-        imports: [kitchen_module_1.KitchenModule],
+        imports: [kitchen_module_1.KitchenModule, delivery_module_1.DeliveryModule],
         controllers: [webhooks_controller_1.WebhooksController],
     })
 ], WebhooksModule);

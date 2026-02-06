@@ -10,12 +10,14 @@ exports.DeliveryModule = void 0;
 const common_1 = require("@nestjs/common");
 const delivery_controller_1 = require("./delivery.controller");
 const delivery_service_1 = require("./delivery.service");
+const uber_direct_service_1 = require("./uber-direct.service");
 let DeliveryModule = class DeliveryModule {
 };
 exports.DeliveryModule = DeliveryModule;
 exports.DeliveryModule = DeliveryModule = __decorate([
     (0, common_1.Module)({
         controllers: [delivery_controller_1.DeliveryController],
-        providers: [delivery_service_1.DeliveryService],
+        providers: [delivery_service_1.DeliveryService, uber_direct_service_1.UberDirectService],
+        exports: [delivery_service_1.DeliveryService],
     })
 ], DeliveryModule);

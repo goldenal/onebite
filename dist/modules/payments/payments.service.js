@@ -8,16 +8,23 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PaymentsService = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const config_1 = require("@nestjs/config");
 const crypto_1 = require("crypto");
+const stripe_1 = __importDefault(require("stripe"));
 let PaymentsService = class PaymentsService {
     constructor(prisma, config) {
         this.prisma = prisma;
         this.config = config;
+        this.stripe = new stripe_1.default(this.config.get('STRIPE_SECRET_KEY') || '', {
+            apiVersion: '2023-10-16',
+        });
     }
     async createCart(dto) {
         const order_id = `ord_${(0, crypto_1.randomUUID)()}`;
@@ -127,6 +134,101 @@ let PaymentsService = class PaymentsService {
             data: { paymentLink: payment_link, updatedAt: new Date() },
         });
         return { order_id, payment_link, state: 'AWAITING_PAYMENT' };
+    }
+    async createCheckoutSession(dto) {
+        const payment = await this.prisma.paymentLink.findUnique({ where: { orderId: dto.order_id } });
+        if (!payment)
+            throw new common_1.NotFoundException('order_not_found');
+        const items = Array.isArray(payment.items) ? payment.items : [];
+        let currency = 'usd';
+        let lineItems = [];
+        if (items.length) {
+            lineItems = items
+                .map((item) => {
+                const name = item?.menuItem?.name || item?.name || 'Item';
+                const unitAmount = Math.round(Number(item?.menuItem?.price ?? item?.price ?? 0) * 100);
+                const quantity = Number(item?.quantity || item?.qty || 1);
+                if (!unitAmount || unitAmount <= 0)
+                    return null;
+                return {
+                    price_data: {
+                        currency,
+                        product_data: { name },
+                        unit_amount: unitAmount,
+                    },
+                    quantity,
+                };
+            })
+                .filter(Boolean);
+        }
+        if (!lineItems.length) {
+            const fallbackAmount = Number(payment.amount || 0);
+            if (!fallbackAmount)
+                throw new common_1.BadRequestException('amount_required');
+            lineItems = [
+                {
+                    price_data: {
+                        currency,
+                        product_data: { name: 'Order' },
+                        unit_amount: Math.round(fallbackAmount * 100),
+                    },
+                    quantity: 1,
+                },
+            ];
+        }
+        if (payment.fulfillment === 'delivery') {
+            const quote = await this.prisma.deliveryQuote.findUnique({ where: { orderId: dto.order_id } });
+            if (!quote)
+                throw new common_1.BadRequestException('delivery_quote_required');
+            if (dto.quote_id && dto.quote_id !== quote.quoteId)
+                throw new common_1.BadRequestException('quote_mismatch');
+            if (quote.expiresAt && quote.expiresAt.getTime() < Date.now())
+                throw new common_1.BadRequestException('quote_expired');
+            currency = quote.currency ? quote.currency.toLowerCase() : currency;
+            lineItems = lineItems.map((li) => ({
+                ...li,
+                price_data: li.price_data ? { ...li.price_data, currency } : li.price_data,
+            }));
+            lineItems.push({
+                price_data: {
+                    currency,
+                    product_data: { name: 'Delivery Fee' },
+                    unit_amount: Math.max(0, quote.feeCents || 0),
+                },
+                quantity: 1,
+            });
+            const subtotal = lineItems.reduce((sum, li) => sum + (li.price_data?.unit_amount || 0) * (li.quantity || 1), 0);
+            await this.prisma.paymentLink.update({
+                where: { orderId: dto.order_id },
+                data: { amount: subtotal / 100, updatedAt: new Date() },
+            });
+        }
+        const customerUrl = this.config.get('CUSTOMER_URL') || this.config.get('FRONTEND_URL') || 'http://localhost:5173';
+        const successUrl = `${customerUrl}/checkout/success?order_id=${dto.order_id}`;
+        const cancelUrl = `${customerUrl}/checkout/cancel?order_id=${dto.order_id}`;
+        const session = await this.stripe.checkout.sessions.create({
+            mode: 'payment',
+            line_items: lineItems,
+            success_url: successUrl,
+            cancel_url: cancelUrl,
+            client_reference_id: dto.order_id,
+            payment_intent_data: {
+                metadata: {
+                    order_id: dto.order_id,
+                    channel: payment.channel || 'web',
+                    fulfillment: payment.fulfillment || 'pickup',
+                    items: JSON.stringify(payment.items ?? []),
+                    customer_name: payment.customerName || '',
+                    customer_phone: payment.customerPhone || '',
+                    quote_id: dto.quote_id || '',
+                },
+            },
+        });
+        await this.prisma.paymentLink.update({
+            where: { orderId: dto.order_id },
+            data: { paymentLink: session.url || null, state: 'AWAITING_PAYMENT', updatedAt: new Date() },
+        });
+        return { order_id: dto.order_id, session_id: session.id, payment_link: session.url, state: 'AWAITING_PAYMENT' };
     }
 };
 exports.PaymentsService = PaymentsService;

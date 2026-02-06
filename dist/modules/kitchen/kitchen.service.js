@@ -36,6 +36,8 @@ let KitchenService = class KitchenService {
             : [];
         const byOrder = new Map();
         items.forEach((i) => {
+            if (!i.orderId)
+                return;
             const list = byOrder.get(i.orderId) || [];
             list.push({
                 name: i.name || '',
@@ -123,6 +125,9 @@ let KitchenService = class KitchenService {
         }
         else if (event === 'delivered') {
             await this.prisma.order.update({ where: { id: orderId }, data: { status: 'delivered', deliveredAt: new Date() } });
+        }
+        else if (event === 'canceled') {
+            await this.prisma.order.update({ where: { id: orderId }, data: { status: 'canceled' } });
         }
         await this.appendAudit(orderId, 'delivery', event);
         stream_hub_1.streamHub.broadcast({ type: 'order.delivery_update', order_id: orderId, driver_status });

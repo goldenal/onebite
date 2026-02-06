@@ -19,6 +19,7 @@ const payments_service_1 = require("./payments.service");
 const cart_create_dto_1 = require("./dto/cart-create.dto");
 const payment_link_dto_1 = require("./dto/payment-link.dto");
 const phone_payment_link_dto_1 = require("./dto/phone-payment-link.dto");
+const checkout_session_dto_1 = require("./dto/checkout-session.dto");
 let PaymentsController = class PaymentsController {
     constructor(payments) {
         this.payments = payments;
@@ -34,6 +35,9 @@ let PaymentsController = class PaymentsController {
     }
     async phonePaymentLink(body) {
         return this.payments.phonePaymentLink(body);
+    }
+    async createCheckoutSession(body) {
+        return this.payments.createCheckoutSession(body);
     }
 };
 exports.PaymentsController = PaymentsController;
@@ -65,6 +69,13 @@ __decorate([
     __metadata("design:paramtypes", [phone_payment_link_dto_1.PhonePaymentLinkDto]),
     __metadata("design:returntype", Promise)
 ], PaymentsController.prototype, "phonePaymentLink", null);
+__decorate([
+    (0, common_1.Post)('payments/checkout-session'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [checkout_session_dto_1.CheckoutSessionDto]),
+    __metadata("design:returntype", Promise)
+], PaymentsController.prototype, "createCheckoutSession", null);
 exports.PaymentsController = PaymentsController = __decorate([
     (0, swagger_1.ApiTags)('payments'),
     (0, common_1.Controller)(),

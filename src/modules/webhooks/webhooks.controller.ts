@@ -6,6 +6,8 @@ import { ConfigService } from '@nestjs/config';
 import { KitchenService } from '../kitchen/kitchen.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { createHmac } from 'crypto';
+import { DeliveryService } from '../delivery/delivery.service';
 
 @ApiTags('webhooks')
 @Controller('webhooks')
@@ -16,6 +18,7 @@ export class WebhooksController {
     private readonly config: ConfigService,
     private readonly kitchen: KitchenService,
     private readonly prisma: PrismaService,
+    private readonly delivery: DeliveryService,
   ) {
     this.stripe = new Stripe(this.config.get<string>('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
@@ -84,6 +87,7 @@ export class WebhooksController {
         ],
       } as any;
 
+      let createdEvent = false;
       await this.prisma.$transaction(async (tx) => {
         await tx.paymentLink.updateMany({ where: { orderId: id }, data: { state: 'PAID', updatedAt: new Date() } });
         let created = false;
@@ -98,8 +102,17 @@ export class WebhooksController {
           }
         }
         if (!created) return;
+        createdEvent = true;
         await this.kitchen.upsertOrderWithItemsTx(tx, order);
       });
+
+      if (createdEvent && fulfillment === 'delivery') {
+        try {
+          await this.delivery.createDeliveryAfterPayment(id);
+        } catch {
+          // delivery creation failure should not fail webhook
+        }
+      }
     }
 
     return res.json({ received: true });
@@ -107,6 +120,62 @@ export class WebhooksController {
 
   @Post('delivery')
   async deliveryWebhook(@Req() req: Request, @Res() res: Response) {
+    const uberSignature =
+      (req.headers['x-uber-signature'] as string | undefined) ||
+      (req.headers['x-postmates-signature'] as string | undefined) ||
+      undefined;
+    if (uberSignature) {
+      const secret = this.config.get<string>('UBER_DIRECT_WEBHOOK_SECRET');
+      if (!secret) {
+        return res.status(500).json({ error: 'server_not_configured', message: 'UBER_DIRECT_WEBHOOK_SECRET required' });
+      }
+      const rawBody = (req as any).rawBody as Buffer | undefined;
+      if (!rawBody) return res.status(400).json({ error: 'invalid_signature' });
+      const computed = createHmac('sha256', secret).update(rawBody).digest('hex');
+      if (computed !== uberSignature) return res.status(400).json({ error: 'invalid_signature' });
+
+      const payload: any = req.body || {};
+      const data = payload.data || payload;
+      const deliveryId = data.delivery_id || data.id || payload.delivery_id;
+      let orderId = data.external_id || data.order_id || payload.order_id || payload.order_ref;
+      const status = data.status || payload.status;
+      const eta = data.dropoff_eta || data.eta || null;
+
+      if (!orderId && deliveryId) {
+        const row = await this.prisma.deliveryRequest.findFirst({ where: { deliveryId } });
+        orderId = row?.orderId;
+      }
+      if (!orderId || !status) return res.status(400).json({ error: 'bad_request' });
+
+      await this.prisma.deliveryRequest.upsert({
+        where: { orderId },
+        update: {
+          provider: 'uber_direct',
+          deliveryId: deliveryId || null,
+          status,
+          eta,
+          updatedAt: new Date(),
+        },
+        create: {
+          orderId,
+          provider: 'uber_direct',
+          deliveryId: deliveryId || null,
+          status,
+          eta,
+        },
+      });
+
+      const event = this.mapUberStatusToEvent(status);
+      if (event) {
+        await this.kitchen.updateDelivery(orderId, event, {
+          status,
+          eta,
+          courier: data.courier || null,
+        });
+      }
+      return res.json({ ok: true });
+    }
+
     const token = this.config.get<string>('DELIVERY_WEBHOOK_TOKEN');
     if (token && req.headers.authorization !== `Bearer ${token}`) {
       return res.status(401).json({ error: 'unauthorized' });
@@ -124,6 +193,14 @@ export class WebhooksController {
 
     await this.kitchen.updateDelivery(payload.order_ref, payload.event, payload.driver_status);
     return res.json({ ok: true });
+  }
+
+  private mapUberStatusToEvent(status: string) {
+    const normalized = status.toLowerCase();
+    if (['pickup', 'pickup_complete', 'enroute_to_dropoff', 'dropoff'].includes(normalized)) return 'picked_up';
+    if (['delivered', 'dropoff_complete'].includes(normalized)) return 'delivered';
+    if (['canceled', 'cancelled', 'returned'].includes(normalized)) return 'canceled';
+    return null;
   }
 
   private safeJson(value: string, fallback: any) {
