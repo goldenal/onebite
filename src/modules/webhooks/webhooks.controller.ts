@@ -163,7 +163,7 @@ export class WebhooksController {
           status,
           eta,
         },
-      });//
+      });
 
       const event = this.mapUberStatusToEvent(status);
       if (event) {

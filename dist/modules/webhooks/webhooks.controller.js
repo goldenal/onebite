@@ -163,7 +163,7 @@ let WebhooksController = class WebhooksController {
                     status,
                     eta,
                 },
-            }); //
+            });
             const event = this.mapUberStatusToEvent(status);
             if (event) {
                 await this.kitchen.updateDelivery(orderId, event, {
