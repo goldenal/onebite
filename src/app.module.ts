@@ -25,6 +25,15 @@ import { LocationsModule } from './modules/locations/locations.module';
 import { LogBodyInterceptor } from './common/interceptors/log-body.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 
+const prettyTarget = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require.resolve('pino-pretty');
+  } catch {
+    return null;
+  }
+})();
+
 @Module({
   imports: [
     ConfigModule,
@@ -34,6 +43,21 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
         level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'info'),
         redact: ['req.headers.authorization', 'req.headers.cookie'],
         autoLogging: false,
+        transport:
+          process.env.LOG_PRETTY === 'true' || process.env.NODE_ENV !== 'production'
+            ? prettyTarget
+              ? {
+                  target: prettyTarget,
+                  options: {
+                    colorize: true,
+                    singleLine: false,
+                    levelFirst: true,
+                    translateTime: 'SYS:standard',
+                    ignore: 'pid,hostname',
+                  },
+                }
+              : undefined
+            : undefined,
         serializers: {
           req(req) {
             return { method: req.method, url: req.url };

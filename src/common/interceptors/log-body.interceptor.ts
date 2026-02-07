@@ -25,6 +25,7 @@ export class LogBodyInterceptor implements NestInterceptor {
           const durationMs = Date.now() - start;
           this.logger.log(
             {
+              msg: `${req.method} ${req.originalUrl || req.url} ${res.statusCode} - ${durationMs}ms`,
               method: req.method,
               url: req.originalUrl || req.url,
               statusCode: res.statusCode,
@@ -41,6 +42,7 @@ export class LogBodyInterceptor implements NestInterceptor {
 
           this.logger.error(
             {
+              msg: `ERROR ${req.method} ${req.originalUrl || req.url} ${statusCode} - ${durationMs}ms`,
               method: req.method,
               url: req.originalUrl || req.url,
               statusCode,

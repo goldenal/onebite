@@ -33,6 +33,15 @@ const voice_module_1 = require("./modules/voice/voice.module");
 const locations_module_1 = require("./modules/locations/locations.module");
 const log_body_interceptor_1 = require("./common/interceptors/log-body.interceptor");
 const core_1 = require("@nestjs/core");
+const prettyTarget = (() => {
+    try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        return require.resolve('pino-pretty');
+    }
+    catch {
+        return null;
+    }
+})();
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -46,6 +55,20 @@ exports.AppModule = AppModule = __decorate([
                     level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'info'),
                     redact: ['req.headers.authorization', 'req.headers.cookie'],
                     autoLogging: false,
+                    transport: process.env.LOG_PRETTY === 'true' || process.env.NODE_ENV !== 'production'
+                        ? prettyTarget
+                            ? {
+                                target: prettyTarget,
+                                options: {
+                                    colorize: true,
+                                    singleLine: false,
+                                    levelFirst: true,
+                                    translateTime: 'SYS:standard',
+                                    ignore: 'pid,hostname',
+                                },
+                            }
+                            : undefined
+                        : undefined,
                     serializers: {
                         req(req) {
                             return { method: req.method, url: req.url };

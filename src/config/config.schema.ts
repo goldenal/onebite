@@ -19,6 +19,7 @@ export const envSchema = z.object({
   UBER_DIRECT_WEBHOOK_SECRET: z.string().optional(),
   UBER_DIRECT_API_BASE: z.string().optional(),
   UBER_DIRECT_AUTH_BASE: z.string().optional(),
+  UBER_DIRECT_OAUTH_SCOPE: z.string().optional(),
   MAKE_VOICE_WEBHOOK_URL: z.string().optional(),
   AI_WORKFLOW_ID: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),

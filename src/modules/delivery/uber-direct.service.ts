@@ -38,11 +38,12 @@ export class UberDirectService {
       throw new Error('UBER_DIRECT_CLIENT_ID and UBER_DIRECT_CLIENT_SECRET required');
     }
 
+    const scope = this.config.get<string>('UBER_DIRECT_OAUTH_SCOPE') || 'eats.organizations';
     const body = new URLSearchParams({
       grant_type: 'client_credentials',
       client_id: clientId,
       client_secret: clientSecret,
-      scope: 'eats.deliveries',
+      scope,
     });
 
     const resp = await fetch(`${this.authBase}/oauth/v2/token`, {

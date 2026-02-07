@@ -26,6 +26,7 @@ let LogBodyInterceptor = class LogBodyInterceptor {
             next: (responseBody) => {
                 const durationMs = Date.now() - start;
                 this.logger.log({
+                    msg: `${req.method} ${req.originalUrl || req.url} ${res.statusCode} - ${durationMs}ms`,
                     method: req.method,
                     url: req.originalUrl || req.url,
                     statusCode: res.statusCode,
@@ -38,6 +39,7 @@ let LogBodyInterceptor = class LogBodyInterceptor {
                 const durationMs = Date.now() - start;
                 const statusCode = error.status || 500;
                 this.logger.error({
+                    msg: `ERROR ${req.method} ${req.originalUrl || req.url} ${statusCode} - ${durationMs}ms`,
                     method: req.method,
                     url: req.originalUrl || req.url,
                     statusCode,

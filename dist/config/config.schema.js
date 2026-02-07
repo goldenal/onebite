@@ -21,6 +21,7 @@ exports.envSchema = zod_1.z.object({
     UBER_DIRECT_WEBHOOK_SECRET: zod_1.z.string().optional(),
     UBER_DIRECT_API_BASE: zod_1.z.string().optional(),
     UBER_DIRECT_AUTH_BASE: zod_1.z.string().optional(),
+    UBER_DIRECT_OAUTH_SCOPE: zod_1.z.string().optional(),
     MAKE_VOICE_WEBHOOK_URL: zod_1.z.string().optional(),
     AI_WORKFLOW_ID: zod_1.z.string().optional(),
     OPENAI_API_KEY: zod_1.z.string().optional(),
