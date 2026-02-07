@@ -38,7 +38,7 @@ export class UberDirectService {
       throw new Error('UBER_DIRECT_CLIENT_ID and UBER_DIRECT_CLIENT_SECRET required');
     }
 
-    const scope = this.config.get<string>('UBER_DIRECT_OAUTH_SCOPE') || 'eats.organizations';
+    const scope = this.config.get<string>('UBER_DIRECT_OAUTH_SCOPE') || 'eats.deliveries';
     const body = new URLSearchParams({
       grant_type: 'client_credentials',
       client_id: clientId,
