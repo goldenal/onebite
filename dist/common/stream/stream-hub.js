@@ -6,8 +6,8 @@ class StreamHub {
         this.clients = [];
         this.nextId = 1;
     }
-    register(res) {
-        const client = { id: this.nextId++, res };
+    register(res, filter, map) {
+        const client = { id: this.nextId++, res, filter, map };
         this.clients.push(client);
         return client.id;
     }
@@ -15,10 +15,15 @@ class StreamHub {
         this.clients = this.clients.filter((c) => c.id !== id);
     }
     broadcast(message) {
-        const data = `data: ${JSON.stringify(message)}\n\n`;
         this.clients.forEach((c) => {
             try {
-                c.res.write(data);
+                if (!c.filter || c.filter(message)) {
+                    const payload = c.map ? c.map(message) : message;
+                    if (!payload)
+                        return;
+                    const data = `data: ${JSON.stringify(payload)}\n\n`;
+                    c.res.write(data);
+                }
             }
             catch {
                 this.unregister(c.id);

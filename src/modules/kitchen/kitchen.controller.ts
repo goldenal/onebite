@@ -33,6 +33,76 @@ export class KitchenController {
     });
   }
 
+  @Get('orders/:id/stream')
+  async streamOrder(@Param('id') id: string, @Req() req: Request, @Res() res: Response) {
+    res.set({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    res.flushHeaders();
+    res.write('retry: 5000\n\n');
+
+    const { streamHub } = await import('../../common/stream/stream-hub');
+    const clientId = streamHub.register(
+      res,
+      (message) => {
+        const order = message.order as any;
+        const orderId = (message.order_id as string | undefined) || (message.orderId as string | undefined);
+        return order?.id === id || orderId === id;
+      },
+      (message) => {
+        const order = message.order as any;
+        if (order?.id === id) {
+          return {
+            type: 'order.status',
+            order_id: order.id,
+            status: order.status,
+            arrival_status: order.arrival_status,
+            fulfillment: order.fulfillment,
+            channel: order.channel,
+          };
+        }
+        if ((message.order_id as string | undefined) === id) {
+          const status = (message as any).status;
+          const arrival = (message as any).arrival_status;
+          if (status || arrival) {
+            return {
+              type: 'order.status',
+              order_id: id,
+              status,
+              arrival_status: arrival,
+            };
+          }
+        }
+        return null;
+      },
+    );
+
+    const current = await this.kitchen.getOrder(id);
+    if (current) {
+      res.write(
+        `data: ${JSON.stringify({
+          type: 'order.status',
+          order_id: current.id,
+          status: current.status,
+          arrival_status: current.arrival_status,
+          fulfillment: current.fulfillment,
+          channel: current.channel,
+        })}\n\n`,
+      );
+    }
+
+    const interval = setInterval(() => {
+      res.write(': keep-alive\n\n');
+    }, 15000);
+
+    req.on('close', () => {
+      clearInterval(interval);
+      streamHub.unregister(clientId);
+    });
+  }
+
   @Get('orders')
   @UseGuards(KitchenAccessGuard)
   async list(@Query('status') status?: string, @Query('channel') channel?: string, @Query('fulfillment') fulfillment?: string) {
@@ -42,6 +112,11 @@ export class KitchenController {
       fulfillment: fulfillment as any,
     });
     return { orders };
+  }
+
+  @Get('orders/:id')
+  async getOrder(@Param('id') id: string) {
+    return this.kitchen.getOrder(id);
   }
 
   @Post('orders/:id/start')

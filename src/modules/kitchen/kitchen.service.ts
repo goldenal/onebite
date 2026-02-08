@@ -125,7 +125,9 @@ export class KitchenService {
     await this.appendAudit(orderId, 'delivery', event);
     streamHub.broadcast({ type: 'order.delivery_update', order_id: orderId, driver_status });
 
-    return this.getOrder(orderId);
+    const updated = await this.getOrder(orderId);
+    if (updated) streamHub.broadcast({ type: 'order.updated', order: updated });
+    return updated;
   }
 
   async refire(id: string, items?: string[], reason?: string) {

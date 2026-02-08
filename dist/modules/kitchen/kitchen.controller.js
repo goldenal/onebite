@@ -72,6 +72,64 @@ let KitchenController = class KitchenController {
             streamHub.unregister(clientId);
         });
     }
+    async streamOrder(id, req, res) {
+        res.set({
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            Connection: 'keep-alive',
+        });
+        res.flushHeaders();
+        res.write('retry: 5000\n\n');
+        const { streamHub } = await Promise.resolve().then(() => __importStar(require('../../common/stream/stream-hub')));
+        const clientId = streamHub.register(res, (message) => {
+            const order = message.order;
+            const orderId = message.order_id || message.orderId;
+            return order?.id === id || orderId === id;
+        }, (message) => {
+            const order = message.order;
+            if (order?.id === id) {
+                return {
+                    type: 'order.status',
+                    order_id: order.id,
+                    status: order.status,
+                    arrival_status: order.arrival_status,
+                    fulfillment: order.fulfillment,
+                    channel: order.channel,
+                };
+            }
+            if (message.order_id === id) {
+                const status = message.status;
+                const arrival = message.arrival_status;
+                if (status || arrival) {
+                    return {
+                        type: 'order.status',
+                        order_id: id,
+                        status,
+                        arrival_status: arrival,
+                    };
+                }
+            }
+            return null;
+        });
+        const current = await this.kitchen.getOrder(id);
+        if (current) {
+            res.write(`data: ${JSON.stringify({
+                type: 'order.status',
+                order_id: current.id,
+                status: current.status,
+                arrival_status: current.arrival_status,
+                fulfillment: current.fulfillment,
+                channel: current.channel,
+            })}\n\n`);
+        }
+        const interval = setInterval(() => {
+            res.write(': keep-alive\n\n');
+        }, 15000);
+        req.on('close', () => {
+            clearInterval(interval);
+            streamHub.unregister(clientId);
+        });
+    }
     async list(status, channel, fulfillment) {
         const orders = await this.kitchen.listOrders({
             status: status,
@@ -79,6 +137,9 @@ let KitchenController = class KitchenController {
             fulfillment: fulfillment,
         });
         return { orders };
+    }
+    async getOrder(id) {
+        return this.kitchen.getOrder(id);
     }
     async start(id) {
         return this.kitchen.updateStatus(id, 'in_prep');
@@ -143,6 +204,15 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "stream", null);
 __decorate([
+    (0, common_1.Get)('orders/:id/stream'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], KitchenController.prototype, "streamOrder", null);
+__decorate([
     (0, common_1.Get)('orders'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
     __param(0, (0, common_1.Query)('status')),
@@ -152,6 +222,13 @@ __decorate([
     __metadata("design:paramtypes", [String, String, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "list", null);
+__decorate([
+    (0, common_1.Get)('orders/:id'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], KitchenController.prototype, "getOrder", null);
 __decorate([
     (0, common_1.Post)('orders/:id/start'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
