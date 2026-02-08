@@ -204,8 +204,8 @@ let PaymentsService = class PaymentsService {
             });
         }
         const customerUrl = this.config.get('CUSTOMER_URL') || this.config.get('FRONTEND_URL') || 'http://localhost:5173';
-        const successUrl = `${customerUrl}/checkout/success?order_id=${dto.order_id}`;
-        const cancelUrl = `${customerUrl}/checkout/cancel?order_id=${dto.order_id}`;
+        const successUrl = `${customerUrl}/success?order_id=${dto.order_id}`;
+        const cancelUrl = `${customerUrl}/cancel?order_id=${dto.order_id}`;
         const session = await this.stripe.checkout.sessions.create({
             mode: 'payment',
             line_items: lineItems,
