@@ -1,6 +1,6 @@
 # Dependencies
 node_modules/
-
+dist/
 # Environment variables (NEVER commit these!)
 .env
 .env.local
@@ -17,4 +17,3 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-dist/
