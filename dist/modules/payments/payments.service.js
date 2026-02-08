@@ -203,6 +203,7 @@ let PaymentsService = class PaymentsService {
                 data: { amount: subtotal / 100, updatedAt: new Date() },
             });
         }
+        //.X
         const customerUrl = this.config.get('CUSTOMER_URL') || this.config.get('FRONTEND_URL') || 'http://localhost:5173';
         const successUrl = `${customerUrl}/success?order_id=${dto.order_id}`;
         const cancelUrl = `${customerUrl}/cancel?order_id=${dto.order_id}`;
