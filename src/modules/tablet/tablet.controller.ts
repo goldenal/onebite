@@ -23,7 +23,7 @@ export class TabletController {
       clearCart: result.clearCart,
       locked: result.locked,
     };
-  }
+  }//
 
   @Post('order-status')
   @ApiBody({ schema: { example: { tabletId: 'tab_1', sessionId: 'sess_1', orderStatus: 'submitted' } } })

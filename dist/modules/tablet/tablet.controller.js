@@ -34,7 +34,7 @@ let TabletController = class TabletController {
             clearCart: result.clearCart,
             locked: result.locked,
         };
-    }
+    } //
     async orderStatus(body) {
         const status = this.tablet.normalizeOrderStatus(body.orderStatus);
         if (!status)
