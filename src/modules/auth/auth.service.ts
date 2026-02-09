@@ -25,14 +25,14 @@ export class AuthService {
     const user = await this.prisma.staffUser.findUnique({ where: { username } });
     if (!user || user.role !== role) throw new UnauthorizedException('Invalid username or password');
 
-    const ok = bcrypt.compareSync(password, user.passwordHash);
+    const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid username or password');
 
     return { username: user.username, role };
   }
 
   async createKitchenUser(username: string, password: string) {
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = await bcrypt.hash(password, 10);
     const user = await this.prisma.staffUser.upsert({
       where: { username },
       update: { passwordHash: hash, role: 'kitchen' },
@@ -42,7 +42,7 @@ export class AuthService {
   }
 
   async createAdminUser(username: string, password: string) {
-    const hash = bcrypt.hashSync(password, 10);
+    const hash = await bcrypt.hash(password, 10);
     const user = await this.prisma.staffUser.upsert({
       where: { username },
       update: { passwordHash: hash, role: 'admin' },

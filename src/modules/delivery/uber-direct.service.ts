@@ -28,6 +28,20 @@ export class UberDirectService {
     return this.config.get<string>('UBER_DIRECT_CUSTOMER_ID') || '';
   }
 
+  private requestTimeoutMs() {
+    return Number(this.config.get<string>('UBER_DIRECT_TIMEOUT_MS') || 8000);
+  }
+
+  private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs = this.requestTimeoutMs()) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
   private async getAccessToken() {
     if (this.accessToken && this.accessTokenExpiresAt && Date.now() < this.accessTokenExpiresAt - 60_000) {
       return this.accessToken;
@@ -46,7 +60,7 @@ export class UberDirectService {
       scope,
     });
 
-    const resp = await fetch(`${this.authBase}/oauth/v2/token`, {
+    const resp = await this.fetchWithTimeout(`${this.authBase}/oauth/v2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString(),
@@ -85,7 +99,7 @@ export class UberDirectService {
     const token = await this.getAccessToken();
     if (!this.customerId) throw new Error('UBER_DIRECT_CUSTOMER_ID required');
 
-    const resp = await fetch(`${this.apiBase}/v1/customers/${this.customerId}/delivery_quotes`, {
+    const resp = await this.fetchWithTimeout(`${this.apiBase}/v1/customers/${this.customerId}/delivery_quotes`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -129,7 +143,7 @@ export class UberDirectService {
     };
     if (params.dropoff_notes) payload.dropoff_notes = params.dropoff_notes;
 
-    const resp = await fetch(`${this.apiBase}/v1/customers/${this.customerId}/deliveries`, {
+    const resp = await this.fetchWithTimeout(`${this.apiBase}/v1/customers/${this.customerId}/deliveries`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,

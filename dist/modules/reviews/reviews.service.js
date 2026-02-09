@@ -236,16 +236,28 @@ let ReviewsService = class ReviewsService {
             where: { email },
             orderBy: { createdAt: 'desc' },
         });
+        const reviewIds = reviews.map((review) => review.id);
+        const replies = reviewIds.length
+            ? await this.prisma.reviewReply.findMany({
+                where: { reviewId: { in: reviewIds } },
+                orderBy: [{ reviewId: 'asc' }, { createdAt: 'asc' }],
+            })
+            : [];
+        const repliesByReview = new Map();
+        for (const reply of replies) {
+            if (!reply.reviewId)
+                continue;
+            const list = repliesByReview.get(reply.reviewId) || [];
+            list.push(reply);
+            repliesByReview.set(reply.reviewId, list);
+        }
         const results = [];
         for (const review of reviews) {
-            const replies = await this.prisma.reviewReply.findMany({
-                where: { reviewId: review.id },
-                orderBy: { createdAt: 'asc' },
-            });
-            const unreadCount = replies.filter((r) => r.senderType === 'admin' && !r.isRead).length;
+            const reviewReplies = repliesByReview.get(review.id) || [];
+            const unreadCount = reviewReplies.filter((r) => r.senderType === 'admin' && !r.isRead).length;
             results.push({
                 ...this.toReview(review),
-                replies: replies.map((r) => this.toReply(r)),
+                replies: reviewReplies.map((r) => this.toReply(r)),
                 unreadCount,
             });
         }
@@ -268,19 +280,31 @@ let ReviewsService = class ReviewsService {
     }
     async adminConversations() {
         const reviews = await this.prisma.customerReview.findMany({ orderBy: { createdAt: 'desc' } });
+        const reviewIds = reviews.map((review) => review.id);
+        const replies = reviewIds.length
+            ? await this.prisma.reviewReply.findMany({
+                where: { reviewId: { in: reviewIds } },
+                orderBy: [{ reviewId: 'asc' }, { createdAt: 'asc' }],
+            })
+            : [];
+        const repliesByReview = new Map();
+        for (const reply of replies) {
+            if (!reply.reviewId)
+                continue;
+            const list = repliesByReview.get(reply.reviewId) || [];
+            list.push(reply);
+            repliesByReview.set(reply.reviewId, list);
+        }
         const enriched = [];
         for (const review of reviews) {
-            const replies = await this.prisma.reviewReply.findMany({
-                where: { reviewId: review.id },
-                orderBy: { createdAt: 'asc' },
-            });
-            const unreadFromCustomer = replies.filter((r) => r.senderType === 'customer' && !r.isRead).length;
-            const lastReply = replies.length ? replies[replies.length - 1] : null;
+            const reviewReplies = repliesByReview.get(review.id) || [];
+            const unreadFromCustomer = reviewReplies.filter((r) => r.senderType === 'customer' && !r.isRead).length;
+            const lastReply = reviewReplies.length ? reviewReplies[reviewReplies.length - 1] : null;
             enriched.push({
                 ...this.toReview(review),
-                replies: replies.map((r) => this.toReply(r)),
+                replies: reviewReplies.map((r) => this.toReply(r)),
                 unreadFromCustomer,
-                hasConversation: replies.length > 0,
+                hasConversation: reviewReplies.length > 0,
                 lastReplyAt: lastReply ? Number(lastReply.createdAt) : null,
                 lastReplyBy: lastReply ? lastReply.senderType : null,
             });
@@ -327,15 +351,27 @@ let ReviewsService = class ReviewsService {
             where: { approved: true, visible: true },
             orderBy: { createdAt: 'desc' },
         });
+        const reviewIds = reviews.map((review) => review.id);
+        const adminReplies = reviewIds.length
+            ? await this.prisma.reviewReply.findMany({
+                where: { reviewId: { in: reviewIds }, senderType: 'admin' },
+                orderBy: [{ reviewId: 'asc' }, { createdAt: 'asc' }],
+            })
+            : [];
+        const adminRepliesByReview = new Map();
+        for (const reply of adminReplies) {
+            if (!reply.reviewId)
+                continue;
+            const list = adminRepliesByReview.get(reply.reviewId) || [];
+            list.push(reply);
+            adminRepliesByReview.set(reply.reviewId, list);
+        }
         const payload = [];
         for (const review of reviews) {
-            const adminReplies = await this.prisma.reviewReply.findMany({
-                where: { reviewId: review.id, senderType: 'admin' },
-                orderBy: { createdAt: 'asc' },
-            });
+            const reviewAdminReplies = adminRepliesByReview.get(review.id) || [];
             payload.push({
                 ...this.toReview(review),
-                adminReplies: adminReplies.map((r) => this.toReply(r)),
+                adminReplies: reviewAdminReplies.map((r) => this.toReply(r)),
             });
         }
         return payload;

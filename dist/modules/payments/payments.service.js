@@ -26,6 +26,36 @@ let PaymentsService = class PaymentsService {
             apiVersion: '2023-10-16',
         });
     }
+    makeWebhookTimeoutMs() {
+        return Number(this.config.get('MAKE_WEBHOOK_TIMEOUT_MS') || 5000);
+    }
+    async fetchWithTimeout(url, init, timeoutMs) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
+        try {
+            return await fetch(url, { ...init, signal: controller.signal });
+        }
+        finally {
+            clearTimeout(timeout);
+        }
+    }
+    async requestMakePaymentLink(payload) {
+        const makeUrl = this.config.get('MAKE_WEBHOOK_URL');
+        if (!makeUrl)
+            return null;
+        try {
+            const resp = await this.fetchWithTimeout(makeUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            }, this.makeWebhookTimeoutMs());
+            const body = await resp.json().catch(() => ({}));
+            return body.payment_link || null;
+        }
+        catch {
+            return null;
+        }
+    }
     async createCart(dto) {
         const order_id = `ord_${(0, crypto_1.randomUUID)()}`;
         await this.prisma.paymentLink.upsert({
@@ -59,22 +89,13 @@ let PaymentsService = class PaymentsService {
         if (!existing)
             throw new common_1.NotFoundException('order_not_found');
         let payment_link = `https://pay.example/${dto.order_id}`;
-        const makeUrl = this.config.get('MAKE_WEBHOOK_URL');
-        if (makeUrl) {
-            try {
-                const resp = await fetch(makeUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: dto.user_id, order_id: dto.order_id, amount: dto.amount }),
-                });
-                const body = await resp.json().catch(() => ({}));
-                if (body.payment_link)
-                    payment_link = body.payment_link;
-            }
-            catch {
-                // ignore webhook errors
-            }
-        }
+        const makePaymentLink = await this.requestMakePaymentLink({
+            user_id: dto.user_id,
+            order_id: dto.order_id,
+            amount: dto.amount,
+        });
+        if (makePaymentLink)
+            payment_link = makePaymentLink;
         await this.prisma.paymentLink.update({
             where: { orderId: dto.order_id },
             data: { amount: dto.amount, state: 'AWAITING_PAYMENT', paymentLink: payment_link, updatedAt: new Date() },
@@ -113,22 +134,9 @@ let PaymentsService = class PaymentsService {
             },
         });
         let payment_link = `https://pay.example/${order_id}`;
-        const makeUrl = this.config.get('MAKE_WEBHOOK_URL');
-        if (makeUrl) {
-            try {
-                const resp = await fetch(makeUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ order_id, amount: dto.amount }),
-                });
-                const body = await resp.json().catch(() => ({}));
-                if (body.payment_link)
-                    payment_link = body.payment_link;
-            }
-            catch {
-                // ignore webhook errors
-            }
-        }
+        const makePaymentLink = await this.requestMakePaymentLink({ order_id, amount: dto.amount });
+        if (makePaymentLink)
+            payment_link = makePaymentLink;
         await this.prisma.paymentLink.update({
             where: { orderId: order_id },
             data: { paymentLink: payment_link, updatedAt: new Date() },

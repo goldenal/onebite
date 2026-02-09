@@ -8,17 +8,19 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var ChatService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatService = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const tablet_service_1 = require("../tablet/tablet.service");
-let ChatService = class ChatService {
+let ChatService = ChatService_1 = class ChatService {
     constructor(prisma, tablet, config) {
         this.prisma = prisma;
         this.tablet = tablet;
         this.config = config;
+        this.logger = new common_1.Logger(ChatService_1.name);
     }
     async handleChat(body) {
         const tabletId = (body.tabletId || 'default-tablet').trim();
@@ -67,15 +69,23 @@ let ChatService = class ChatService {
     }
     async reset(tabletId) {
         const id = (tabletId || 'default-tablet').trim();
-        await this.prisma.tabletSession.update({
-            where: { tabletId: id },
-            data: { conversationHistory: [], questionCount: 0, warningSent: false, agentConversationId: null },
-        }).catch(() => null);
+        try {
+            await this.prisma.tabletSession.update({
+                where: { tabletId: id },
+                data: { conversationHistory: [], questionCount: 0, warningSent: false, agentConversationId: null },
+            });
+        }
+        catch (error) {
+            if (error?.code !== 'P2025') {
+                this.logger.error(`Failed to reset chat session for tabletId=${id}`, error?.stack || String(error));
+                throw error;
+            }
+        }
         return { success: true, message: 'Conversation reset' };
     }
 };
 exports.ChatService = ChatService;
-exports.ChatService = ChatService = __decorate([
+exports.ChatService = ChatService = ChatService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         tablet_service_1.TabletService,

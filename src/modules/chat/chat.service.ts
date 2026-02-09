@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TabletService } from '../tablet/tablet.service';
 
 @Injectable()
 export class ChatService {
+  private readonly logger = new Logger(ChatService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tablet: TabletService,
@@ -65,10 +67,17 @@ export class ChatService {
 
   async reset(tabletId?: string) {
     const id = (tabletId || 'default-tablet').trim();
-    await this.prisma.tabletSession.update({
-      where: { tabletId: id },
-      data: { conversationHistory: [], questionCount: 0, warningSent: false, agentConversationId: null },
-    }).catch(() => null);
+    try {
+      await this.prisma.tabletSession.update({
+        where: { tabletId: id },
+        data: { conversationHistory: [], questionCount: 0, warningSent: false, agentConversationId: null },
+      });
+    } catch (error: any) {
+      if (error?.code !== 'P2025') {
+        this.logger.error(`Failed to reset chat session for tabletId=${id}`, error?.stack || String(error));
+        throw error;
+      }
+    }
     return { success: true, message: 'Conversation reset' };
   }
 }

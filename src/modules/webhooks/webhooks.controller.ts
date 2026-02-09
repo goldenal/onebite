@@ -1,4 +1,4 @@
-import { Controller, Headers, Post, Req, Res } from '@nestjs/common';
+import { Controller, Headers, Logger, Post, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import Stripe from 'stripe';
@@ -13,6 +13,7 @@ import { DeliveryService } from '../delivery/delivery.service';
 @Controller('webhooks')
 export class WebhooksController {
   private stripe: Stripe;
+  private readonly logger = new Logger(WebhooksController.name);
 
   constructor(
     private readonly config: ConfigService,
@@ -107,11 +108,7 @@ export class WebhooksController {
       });
 
       if (createdEvent && fulfillment === 'delivery') {
-        try {
-          await this.delivery.createDeliveryAfterPayment(id);
-        } catch {
-          // delivery creation failure should not fail webhook
-        }
+        this.enqueueDeliveryCreation(id);
       }
     }
 
@@ -209,5 +206,16 @@ export class WebhooksController {
     } catch {
       return fallback;
     }
+  }
+
+  private enqueueDeliveryCreation(orderId: string) {
+    setImmediate(() => {
+      void this.delivery.createDeliveryAfterPayment(orderId).catch((error: any) => {
+        this.logger.error(
+          `Failed async delivery creation for orderId=${orderId}`,
+          error?.stack || String(error),
+        );
+      });
+    });
   }
 }

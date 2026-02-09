@@ -196,9 +196,9 @@ let KitchenService = class KitchenService {
             throw new common_1.NotFoundException('conflict');
         await this.prisma.$transaction(async (tx) => {
             await tx.orderItem.deleteMany({ where: { orderId: id } });
-            for (const item of items) {
-                await tx.orderItem.create({
-                    data: {
+            if (items.length) {
+                await tx.orderItem.createMany({
+                    data: items.map((item) => ({
                         orderId: id,
                         name: item.name,
                         qty: item.qty,
@@ -206,7 +206,7 @@ let KitchenService = class KitchenService {
                         allergies: item.allergies ?? [],
                         station: item.station ?? null,
                         notes: item.notes ?? null,
-                    },
+                    })),
                 });
             }
             if (opts.priority_flag !== undefined || opts.prep_estimate_minutes !== undefined) {
@@ -348,9 +348,9 @@ let KitchenService = class KitchenService {
             },
         });
         await tx.orderItem.deleteMany({ where: { orderId: order.id } });
-        for (const item of order.items) {
-            await tx.orderItem.create({
-                data: {
+        if (order.items.length) {
+            await tx.orderItem.createMany({
+                data: order.items.map((item) => ({
                     orderId: order.id,
                     name: item.name,
                     qty: item.qty,
@@ -358,18 +358,19 @@ let KitchenService = class KitchenService {
                     allergies: item.allergies ?? [],
                     station: item.station ?? null,
                     notes: item.notes ?? null,
-                },
+                })),
             });
         }
-        for (const audit of order.audit || []) {
-            await tx.auditEntry.create({
-                data: {
+        const audits = order.audit || [];
+        if (audits.length) {
+            await tx.auditEntry.createMany({
+                data: audits.map((audit) => ({
                     orderId: order.id,
                     ts: new Date(audit.ts),
                     actor: audit.actor,
                     action: audit.action,
                     details: audit.details ?? {},
-                },
+                })),
             });
         }
     }

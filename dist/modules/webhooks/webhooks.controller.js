@@ -14,6 +14,7 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
+var WebhooksController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WebhooksController = void 0;
 const common_1 = require("@nestjs/common");
@@ -25,12 +26,13 @@ const prisma_service_1 = require("../../prisma/prisma.service");
 const client_1 = require("@prisma/client");
 const crypto_1 = require("crypto");
 const delivery_service_1 = require("../delivery/delivery.service");
-let WebhooksController = class WebhooksController {
+let WebhooksController = WebhooksController_1 = class WebhooksController {
     constructor(config, kitchen, prisma, delivery) {
         this.config = config;
         this.kitchen = kitchen;
         this.prisma = prisma;
         this.delivery = delivery;
+        this.logger = new common_1.Logger(WebhooksController_1.name);
         this.stripe = new stripe_1.default(this.config.get('STRIPE_SECRET_KEY') || '', {
             apiVersion: '2023-10-16',
         });
@@ -110,12 +112,7 @@ let WebhooksController = class WebhooksController {
                 await this.kitchen.upsertOrderWithItemsTx(tx, order);
             });
             if (createdEvent && fulfillment === 'delivery') {
-                try {
-                    await this.delivery.createDeliveryAfterPayment(id);
-                }
-                catch {
-                    // delivery creation failure should not fail webhook
-                }
+                this.enqueueDeliveryCreation(id);
             }
         }
         return res.json({ received: true });
@@ -203,6 +200,13 @@ let WebhooksController = class WebhooksController {
             return fallback;
         }
     }
+    enqueueDeliveryCreation(orderId) {
+        setImmediate(() => {
+            void this.delivery.createDeliveryAfterPayment(orderId).catch((error) => {
+                this.logger.error(`Failed async delivery creation for orderId=${orderId}`, error?.stack || String(error));
+            });
+        });
+    }
 };
 exports.WebhooksController = WebhooksController;
 __decorate([
@@ -222,7 +226,7 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], WebhooksController.prototype, "deliveryWebhook", null);
-exports.WebhooksController = WebhooksController = __decorate([
+exports.WebhooksController = WebhooksController = WebhooksController_1 = __decorate([
     (0, swagger_1.ApiTags)('webhooks'),
     (0, common_1.Controller)('webhooks'),
     __metadata("design:paramtypes", [config_1.ConfigService,
