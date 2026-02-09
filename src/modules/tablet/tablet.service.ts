@@ -45,102 +45,115 @@ export class TabletService {
   }
 
   async touchSession(options: {
-    tabletId: string;
-    incrementQuestions?: boolean;
-    orderStatusOverride?: OrderStatus;
-    appendMessage?: ConversationMessage;
-    appendMessages?: ConversationMessage[];
-    setAgentConversationId?: string | null;
-  }) {
-    const now = new Date();
+  tabletId: string;
+  incrementQuestions?: boolean;
+  orderStatusOverride?: OrderStatus;
+  appendMessage?: ConversationMessage;
+  appendMessages?: ConversationMessage[];
+  setAgentConversationId?: string | null;
+}) {
+  const now = new Date();
 
-    const existing = await this.prisma.tabletSession.findUnique({ where: { tabletId: options.tabletId } });
+  // QUERY 1: Get existing session
+  const existing = await this.prisma.tabletSession.findUnique({ 
+    where: { tabletId: options.tabletId } 
+  });
 
-    let session = existing;
-    let sessionReset = false;
-    let clearCart = false;
-    let showPreTimeoutWarning = false;
+  let session = existing;
+  let sessionReset = false;
+  let clearCart = false;
+  let showPreTimeoutWarning = false;
 
-    const lastActivity = session ? new Date(session.lastActivityTimestamp) : null;
-    const inactivityMs = session && lastActivity ? now.getTime() - lastActivity.getTime() : 0;
-    const lockedExisting = this.isLocked(session?.orderStatus as OrderStatus | undefined);
-    const lockedOverride = this.isLocked(options.orderStatusOverride);
-    const ignoreTimeout = lockedExisting || lockedOverride;
+  const lastActivity = session ? new Date(session.lastActivityTimestamp) : null;
+  const inactivityMs = session && lastActivity ? now.getTime() - lastActivity.getTime() : 0;
+  const lockedExisting = this.isLocked(session?.orderStatus as OrderStatus | undefined);
+  const lockedOverride = this.isLocked(options.orderStatusOverride);
+  const ignoreTimeout = lockedExisting || lockedOverride;
 
-    if (!session) {
-      session = await this.prisma.tabletSession.create({
-        data: {
-          tabletId: options.tabletId,
-          sessionId: randomUUID(),
-          questionCount: 0,
-          lastActivityTimestamp: now,
-          orderStatus: 'NONE',
-          warningSent: false,
-          agentConversationId: null,
-          conversationHistory: [],
-        },
-      });
-      sessionReset = true;
-      clearCart = true;
-    } else if (!ignoreTimeout && inactivityMs >= this.expireAfterMs()) {
-      session = await this.prisma.tabletSession.update({
-        where: { tabletId: options.tabletId },
-        data: {
-          sessionId: randomUUID(),
-          questionCount: 0,
-          warningSent: false,
-          orderStatus: 'NONE',
-          agentConversationId: null,
-          conversationHistory: [],
-          lastActivityTimestamp: now,
-        },
-      });
-      sessionReset = true;
-      clearCart = true;
-    } else if (!ignoreTimeout && session.orderStatus === 'NONE' && !session.warningSent && inactivityMs >= this.warningAfterMs()) {
-      session = await this.prisma.tabletSession.update({
-        where: { tabletId: options.tabletId },
-        data: { warningSent: true },
-      });
-      showPreTimeoutWarning = true;
-    }
+  // Calculate all updates BEFORE touching database again
+  let shouldResetSession = false;
+  let shouldSendWarning = false;
 
-    let conversation: ConversationMessage[] = Array.isArray(session?.conversationHistory)
-      ? (session?.conversationHistory as any)
-      : [];
-    if (sessionReset) conversation = [];
-
-    if (options.appendMessage) conversation.push(options.appendMessage);
-    if (options.appendMessages) conversation.push(...options.appendMessages);
-    if (conversation.length > 20) conversation.splice(0, conversation.length - 20);
-
-    const newQuestionCount = options.incrementQuestions && !this.isLocked(session?.orderStatus as any)
-      ? Number(session?.questionCount || 0) + 1
-      : Number(session?.questionCount || 0);
-
-    const updated = await this.prisma.tabletSession.update({
-      where: { tabletId: options.tabletId },
-      data: {
-        lastActivityTimestamp: now,
-        questionCount: newQuestionCount,
-        orderStatus: options.orderStatusOverride ?? session?.orderStatus ?? 'NONE',
-        agentConversationId: options.setAgentConversationId ?? session?.agentConversationId ?? null,
-        conversationHistory: conversation as any,
-      },
-    });
-
-    const remainingQuestions = this.clampRemaining(Number(updated.questionCount || 0));
-    return {
-      session: updated,
-      sessionReset,
-      clearCart,
-      showPreTimeoutWarning,
-      remainingQuestions,
-      questionLimitReached: Number(updated.questionCount || 0) > this.questionLimit(),
-      locked: this.isLocked(updated.orderStatus as any),
-      inactivityMs: inactivityMs < 0 ? 0 : inactivityMs,
-      conversationHistory: conversation,
-      agentConversationId: updated.agentConversationId ?? null,
-    };
+  if (!session) {
+    shouldResetSession = true;
+    clearCart = true;
+  } else if (!ignoreTimeout && inactivityMs >= this.expireAfterMs()) {
+    shouldResetSession = true;
+    clearCart = true;
+  } else if (
+    !ignoreTimeout && 
+    session.orderStatus === 'NONE' && 
+    !session.warningSent && 
+    inactivityMs >= this.warningAfterMs()
+  ) {
+    shouldSendWarning = true;
+    showPreTimeoutWarning = true;
   }
+
+  // Prepare conversation history
+  let conversation: ConversationMessage[] = Array.isArray(session?.conversationHistory)
+    ? (session?.conversationHistory as any)
+    : [];
+  
+  if (shouldResetSession) {
+    conversation = [];
+    sessionReset = true;
+  }
+
+  if (options.appendMessage) conversation.push(options.appendMessage);
+  if (options.appendMessages) conversation.push(...options.appendMessages);
+  if (conversation.length > 20) conversation.splice(0, conversation.length - 20);
+
+  const newQuestionCount = options.incrementQuestions && !this.isLocked(session?.orderStatus as any)
+    ? Number(session?.questionCount || 0) + 1
+    : Number(session?.questionCount || 0);
+
+  // QUERY 2: Single upsert with all updates
+  const updated = await this.prisma.tabletSession.upsert({
+    where: { tabletId: options.tabletId },
+    create: {
+      tabletId: options.tabletId,
+      sessionId: randomUUID(),
+      questionCount: newQuestionCount,
+      lastActivityTimestamp: now,
+      orderStatus: options.orderStatusOverride ?? 'NONE',
+      warningSent: shouldSendWarning,
+      agentConversationId: options.setAgentConversationId ?? null,
+      conversationHistory: conversation as any,
+    },
+    update: shouldResetSession ? {
+      // Reset everything
+      sessionId: randomUUID(),
+      questionCount: newQuestionCount,
+      warningSent: false,
+      orderStatus: options.orderStatusOverride ?? 'NONE',
+      agentConversationId: options.setAgentConversationId ?? null,
+      conversationHistory: conversation as any,
+      lastActivityTimestamp: now,
+    } : {
+      // Normal update
+      lastActivityTimestamp: now,
+      questionCount: newQuestionCount,
+      orderStatus: options.orderStatusOverride ?? session?.orderStatus ?? 'NONE',
+      agentConversationId: options.setAgentConversationId ?? session?.agentConversationId ?? null,
+      conversationHistory: conversation as any,
+      warningSent: shouldSendWarning ? true : (session?.warningSent ?? false),
+    },
+  });
+
+  const remainingQuestions = this.clampRemaining(Number(updated.questionCount || 0));
+  
+  return {
+    session: updated,
+    sessionReset,
+    clearCart,
+    showPreTimeoutWarning,
+    remainingQuestions,
+    questionLimitReached: Number(updated.questionCount || 0) > this.questionLimit(),
+    locked: this.isLocked(updated.orderStatus as any),
+    inactivityMs: inactivityMs < 0 ? 0 : inactivityMs,
+    conversationHistory: conversation,
+    agentConversationId: updated.agentConversationId ?? null,
+  };
+}
 }
