@@ -126,10 +126,10 @@ __decorate([
     __metadata("design:type", String)
 ], CartCreateDto.prototype, "fulfillment", void 0);
 __decorate([
-    (0, swagger_1.ApiPropertyOptional)({ example: 'web', enum: ['web', 'phone', 'tablet'] }),
+    (0, swagger_1.ApiPropertyOptional)({ example: 'web', enum: ['web', 'phone', 'tablet', 'ai'] }),
     (0, class_validator_1.IsOptional)(),
     (0, class_validator_1.IsString)(),
-    (0, class_validator_1.IsEnum)(['web', 'phone', 'tablet']),
+    (0, class_validator_1.IsEnum)(['web', 'phone', 'tablet', 'ai']),
     __metadata("design:type", String)
 ], CartCreateDto.prototype, "channel", void 0);
 __decorate([

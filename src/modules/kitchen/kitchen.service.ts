@@ -156,7 +156,9 @@ export class KitchenService {
     const items = Array.isArray(body.items) && body.items.length ? body.items : [{ name: 'Jambalaya', qty: 1, station: 'line' }];
 
     const pickupCode =
-      fulfillment === 'pickup' && (channel === 'web' || channel === 'phone') ? this.generatePickupCode() : undefined;
+      fulfillment === 'pickup' && (channel === 'web' || channel === 'phone' || channel === 'ai')
+        ? this.generatePickupCode()
+        : undefined;
 
     const order: Order = {
       id,
@@ -167,7 +169,9 @@ export class KitchenService {
           ? `Web ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
           : channel === 'phone'
             ? `Phone ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
-            : 'In-Store Tablet',
+            : channel === 'ai'
+              ? `AI ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
+              : 'In-Store Tablet',
       status: 'queued',
       arrival_status:
         fulfillment === 'pickup'

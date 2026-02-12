@@ -92,11 +92,11 @@ export class CartCreateDto {
   @IsEnum(['pickup', 'delivery', 'tablet'])
   fulfillment!: 'pickup' | 'delivery' | 'tablet';
 
-  @ApiPropertyOptional({ example: 'web', enum: ['web', 'phone', 'tablet'] })
+  @ApiPropertyOptional({ example: 'web', enum: ['web', 'phone', 'tablet', 'ai'] })
   @IsOptional()
   @IsString()
-  @IsEnum(['web', 'phone', 'tablet'])
-  channel?: 'web' | 'phone' | 'tablet';
+  @IsEnum(['web', 'phone', 'tablet', 'ai'])
+  channel?: 'web' | 'phone' | 'tablet' | 'ai';
 
   @ApiPropertyOptional({ example: 'Chris Brown' })
   @IsOptional()

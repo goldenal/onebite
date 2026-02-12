@@ -60,7 +60,7 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
             const fulfillment = (metadata.fulfillment || 'pickup');
             const now = new Date().toISOString();
             const id = this.kitchen.normalizeOrderId(metadata.order_id || metadata.cart_id || pi.id);
-            const pickupCode = fulfillment === 'pickup' && (channel === 'web' || channel === 'phone')
+            const pickupCode = fulfillment === 'pickup' && (channel === 'web' || channel === 'phone' || channel === 'ai')
                 ? this.kitchen.generatePickupCode()
                 : undefined;
             const items = metadata.items ? this.safeJson(metadata.items, []) : [];
@@ -72,7 +72,9 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
                     ? `Web ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
                     : channel === 'phone'
                         ? `Phone ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
-                        : 'In-Store Tablet',
+                        : channel === 'ai'
+                            ? `AI ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
+                            : 'In-Store Tablet',
                 status: 'queued',
                 arrival_status: fulfillment === 'pickup'
                     ? channel === 'tablet'

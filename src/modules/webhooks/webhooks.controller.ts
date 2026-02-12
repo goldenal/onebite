@@ -53,7 +53,7 @@ export class WebhooksController {
       const id = this.kitchen.normalizeOrderId(metadata.order_id || metadata.cart_id || pi.id);
 
       const pickupCode =
-        fulfillment === 'pickup' && (channel === 'web' || channel === 'phone')
+        fulfillment === 'pickup' && (channel === 'web' || channel === 'phone' || channel === 'ai')
           ? this.kitchen.generatePickupCode()
           : undefined;
 
@@ -68,7 +68,9 @@ export class WebhooksController {
             ? `Web ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
             : channel === 'phone'
               ? `Phone ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
-              : 'In-Store Tablet',
+              : channel === 'ai'
+                ? `AI ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
+                : 'In-Store Tablet',
         status: 'queued',
         arrival_status:
           fulfillment === 'pickup'

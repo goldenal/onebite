@@ -1,4 +1,4 @@
-export type Channel = 'web' | 'tablet' | 'phone';
+export type Channel = 'web' | 'tablet' | 'phone' | 'ai';
 export type Fulfillment = 'pickup' | 'delivery';
 export type Status =
   | 'queued'
