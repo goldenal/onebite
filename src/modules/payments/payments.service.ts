@@ -8,6 +8,14 @@ import { randomUUID } from 'crypto';
 import Stripe from 'stripe';
 import { CheckoutSessionDto } from './dto/checkout-session.dto';
 
+type ResolvedMenuPriceItem = {
+  raw: any;
+  menuItemId: string;
+  name: string;
+  quantity: number;
+  unitAmountCents: number;
+};
+
 @Injectable()
 export class PaymentsService {
   private stripe: Stripe;
@@ -52,15 +60,107 @@ export class PaymentsService {
     }
   }
 
+  private toCents(value: unknown) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+    return Math.round(numeric * 100);
+  }
+
+  private normalizeRawItems(value: unknown) {
+    return Array.isArray(value) ? (value as any[]) : [];
+  }
+
+  private async resolveMenuPricedItems(items: any[]): Promise<ResolvedMenuPriceItem[]> {
+    if (!items.length) return [];
+
+    const parsed = items.map((raw, index) => {
+      const id = String(raw?.menuItem?.id ?? raw?.menuItemId ?? raw?.id ?? '').trim();
+      if (!id) throw new BadRequestException(`menu_item_id_required_at_index_${index}`);
+
+      const quantity = Number(raw?.quantity ?? raw?.qty ?? 1);
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        throw new BadRequestException(`invalid_quantity_at_index_${index}`);
+      }
+
+      return { raw, menuItemId: id, quantity };
+    });
+
+    const menuItems = await this.prisma.menuItem.findMany({
+      where: { id: { in: Array.from(new Set(parsed.map((item) => item.menuItemId))) } },
+      select: { id: true, name: true, price: true },
+    });
+    const byId = new Map(menuItems.map((row) => [row.id, row]));
+
+    return parsed.map((item) => {
+      const menuItem = byId.get(item.menuItemId);
+      if (!menuItem) throw new BadRequestException(`menu_item_not_found:${item.menuItemId}`);
+
+      const unitAmountCents = this.toCents(menuItem.price);
+      if (unitAmountCents <= 0) throw new BadRequestException(`invalid_menu_item_price:${item.menuItemId}`);
+
+      return {
+        raw: item.raw,
+        menuItemId: item.menuItemId,
+        name: menuItem.name || 'Item',
+        quantity: item.quantity,
+        unitAmountCents,
+      };
+    });
+  }
+
+  private totalFromResolvedItems(resolvedItems: ResolvedMenuPriceItem[]) {
+    return resolvedItems.reduce((sum, item) => sum + item.unitAmountCents * item.quantity, 0);
+  }
+
+  private toPersistedItems(resolvedItems: ResolvedMenuPriceItem[]) {
+    return resolvedItems.map((item) => {
+      const raw = item.raw && typeof item.raw === 'object' ? item.raw : {};
+      const existingMenuItem = raw.menuItem && typeof raw.menuItem === 'object' ? raw.menuItem : {};
+      return {
+        ...raw,
+        id: item.menuItemId,
+        menuItemId: item.menuItemId,
+        name: item.name,
+        price: item.unitAmountCents / 100,
+        quantity: item.quantity,
+        menuItem: {
+          ...existingMenuItem,
+          id: item.menuItemId,
+          name: item.name,
+          price: item.unitAmountCents / 100,
+        },
+      };
+    });
+  }
+
+  private toStripeLineItems(resolvedItems: ResolvedMenuPriceItem[], currency: string) {
+    return resolvedItems.map((item) => ({
+      price_data: {
+        currency,
+        product_data: { name: item.name },
+        unit_amount: item.unitAmountCents,
+      },
+      quantity: item.quantity,
+    }));
+  }
+
   async createCart(dto: CartCreateDto) {
     const order_id = `ord_${randomUUID()}`;
+    const rawItems = this.normalizeRawItems(dto.items);
+    const resolvedItems = await this.resolveMenuPricedItems(rawItems);
+    if (!resolvedItems.length) throw new BadRequestException('items_required');
+    const itemsTotalCents = this.totalFromResolvedItems(resolvedItems);
+    const amount = itemsTotalCents / 100;
+    if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('amount_required');
+    const items = resolvedItems.length ? this.toPersistedItems(resolvedItems) : rawItems;
+
     await this.prisma.paymentLink.upsert({
       where: { orderId: order_id },
       update: {
-        amount: dto.amount,
+        amount,
         fulfillment: dto.fulfillment,
         channel: dto.channel || 'web',
-        items: (dto.items as any) ?? [],
+        items,
         customerName: dto.customerName ?? null,
         customerPhone: dto.customerPhone ?? null,
         state: 'AWAITING_PAYMENT',
@@ -69,36 +169,43 @@ export class PaymentsService {
       create: {
         orderId: order_id,
         userId: dto.user_id ?? null,
-        amount: dto.amount,
+        amount,
         state: 'AWAITING_PAYMENT',
         fulfillment: dto.fulfillment,
         channel: dto.channel || 'web',
-        items: (dto.items as any) ?? [],
+        items,
         customerName: dto.customerName ?? null,
         customerPhone: dto.customerPhone ?? null,
       },
     });
-    return { order_id, state: 'AWAITING_PAYMENT' };
+    return { order_id, amount, state: 'AWAITING_PAYMENT' };
   }
 
   async createPaymentLink(dto: PaymentLinkDto) {
     const existing = await this.prisma.paymentLink.findUnique({ where: { orderId: dto.order_id } });
     if (!existing) throw new NotFoundException('order_not_found');
+    const rawItems = this.normalizeRawItems(existing.items);
+    const resolvedItems = await this.resolveMenuPricedItems(rawItems);
+    if (!resolvedItems.length) throw new BadRequestException('items_required');
+    const itemsTotalCents = this.totalFromResolvedItems(resolvedItems);
+    const amount = itemsTotalCents / 100;
+    if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('amount_required');
+    const items = resolvedItems.length ? this.toPersistedItems(resolvedItems) : rawItems;
 
     let payment_link = `https://pay.example/${dto.order_id}`;
     const makePaymentLink = await this.requestMakePaymentLink({
       user_id: dto.user_id,
       order_id: dto.order_id,
-      amount: dto.amount,
+      amount,
     });
     if (makePaymentLink) payment_link = makePaymentLink;
 
     await this.prisma.paymentLink.update({
       where: { orderId: dto.order_id },
-      data: { amount: dto.amount, state: 'AWAITING_PAYMENT', paymentLink: payment_link, updatedAt: new Date() },
+      data: { amount, items, state: 'AWAITING_PAYMENT', paymentLink: payment_link, updatedAt: new Date() },
     });
 
-    return { payment_link, state: 'AWAITING_PAYMENT' };
+    return { payment_link, amount, state: 'AWAITING_PAYMENT' };
   }
 
   async getPayment(orderId: string) {
@@ -109,13 +216,21 @@ export class PaymentsService {
 
   async phonePaymentLink(dto: PhonePaymentLinkDto) {
     const order_id = `ord_${randomUUID()}`;
+    const rawItems = this.normalizeRawItems(dto.items);
+    const resolvedItems = await this.resolveMenuPricedItems(rawItems);
+    if (!resolvedItems.length) throw new BadRequestException('items_required');
+    const itemsTotalCents = this.totalFromResolvedItems(resolvedItems);
+    const amount = itemsTotalCents / 100;
+    if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('amount_required');
+    const items = resolvedItems.length ? this.toPersistedItems(resolvedItems) : rawItems;
+
     await this.prisma.paymentLink.upsert({
       where: { orderId: order_id },
       update: {
-        amount: dto.amount,
+        amount,
         fulfillment: dto.fulfillment || 'pickup',
         channel: 'phone',
-        items: (dto.items as any) ?? [],
+        items,
         customerName: dto.customerName ?? null,
         customerPhone: dto.customerPhone ?? null,
         state: 'AWAITING_PAYMENT',
@@ -123,18 +238,18 @@ export class PaymentsService {
       },
       create: {
         orderId: order_id,
-        amount: dto.amount,
+        amount,
         state: 'AWAITING_PAYMENT',
         fulfillment: dto.fulfillment || 'pickup',
         channel: 'phone',
-        items: (dto.items as any) ?? [],
+        items,
         customerName: dto.customerName ?? null,
         customerPhone: dto.customerPhone ?? null,
       },
     });
 
     let payment_link = `https://pay.example/${order_id}`;
-    const makePaymentLink = await this.requestMakePaymentLink({ order_id, amount: dto.amount });
+    const makePaymentLink = await this.requestMakePaymentLink({ order_id, amount });
     if (makePaymentLink) payment_link = makePaymentLink;
 
     await this.prisma.paymentLink.update({
@@ -142,50 +257,21 @@ export class PaymentsService {
       data: { paymentLink: payment_link, updatedAt: new Date() },
     });
 
-    return { order_id, payment_link, state: 'AWAITING_PAYMENT' };
+    return { order_id, payment_link, amount, state: 'AWAITING_PAYMENT' };
   }
 
   async createCheckoutSession(dto: CheckoutSessionDto) {
     const payment = await this.prisma.paymentLink.findUnique({ where: { orderId: dto.order_id } });
     if (!payment) throw new NotFoundException('order_not_found');
 
-    const items = Array.isArray(payment.items) ? (payment.items as any[]) : [];
+    const rawItems = this.normalizeRawItems(payment.items);
+    const resolvedItems = await this.resolveMenuPricedItems(rawItems);
+    if (!resolvedItems.length) throw new BadRequestException('items_required');
+    const items = resolvedItems.length ? this.toPersistedItems(resolvedItems) : rawItems;
     let currency = 'usd';
     let lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [];
 
-    if (items.length) {
-      lineItems = items
-        .map((item) => {
-          const name = item?.menuItem?.name || item?.name || 'Item';
-          const unitAmount = Math.round(Number(item?.menuItem?.price ?? item?.price ?? 0) * 100);
-          const quantity = Number(item?.quantity || item?.qty || 1);
-          if (!unitAmount || unitAmount <= 0) return null;
-          return {
-            price_data: {
-              currency,
-              product_data: { name },
-              unit_amount: unitAmount,
-            },
-            quantity,
-          };
-        })
-        .filter(Boolean) as Stripe.Checkout.SessionCreateParams.LineItem[];
-    }
-
-    if (!lineItems.length) {
-      const fallbackAmount = Number(payment.amount || 0);
-      if (!fallbackAmount) throw new BadRequestException('amount_required');
-      lineItems = [
-        {
-          price_data: {
-            currency,
-            product_data: { name: 'Order' },
-            unit_amount: Math.round(fallbackAmount * 100),
-          },
-          quantity: 1,
-        },
-      ];
-    }
+    if (resolvedItems.length) lineItems = this.toStripeLineItems(resolvedItems, currency);
 
     if (payment.fulfillment === 'delivery') {
       const quote = await (this.prisma as any).deliveryQuote.findUnique({ where: { orderId: dto.order_id } });
@@ -206,14 +292,11 @@ export class PaymentsService {
         },
         quantity: 1,
       });
-
-      const subtotal = lineItems.reduce((sum, li) => sum + (li.price_data?.unit_amount || 0) * (li.quantity || 1), 0);
-      await this.prisma.paymentLink.update({
-        where: { orderId: dto.order_id },
-        data: { amount: subtotal / 100, updatedAt: new Date() },
-      });
     }
-//.X
+
+    const totalCents = lineItems.reduce((sum, li) => sum + (li.price_data?.unit_amount || 0) * (li.quantity || 1), 0);
+    const amount = totalCents / 100;
+    if (!Number.isFinite(amount) || amount <= 0) throw new BadRequestException('amount_required');
     const customerUrl =
       this.config.get<string>('CUSTOMER_URL') || this.config.get<string>('FRONTEND_URL') || 'http://localhost:5173';
     const successUrl = `${customerUrl}/success?order_id=${dto.order_id}`;
@@ -230,7 +313,6 @@ export class PaymentsService {
           order_id: dto.order_id,
           channel: payment.channel || 'web',
           fulfillment: payment.fulfillment || 'pickup',
-          items: JSON.stringify(payment.items ?? []),
           customer_name: payment.customerName || '',
           customer_phone: payment.customerPhone || '',
           quote_id: dto.quote_id || '',
@@ -240,9 +322,9 @@ export class PaymentsService {
 
     await this.prisma.paymentLink.update({
       where: { orderId: dto.order_id },
-      data: { paymentLink: session.url || null, state: 'AWAITING_PAYMENT', updatedAt: new Date() },
+      data: { amount, items, paymentLink: session.url || null, state: 'AWAITING_PAYMENT', updatedAt: new Date() },
     });
 
-    return { order_id: dto.order_id, session_id: session.id, payment_link: session.url, state: 'AWAITING_PAYMENT' };
+    return { order_id: dto.order_id, session_id: session.id, payment_link: session.url, amount, state: 'AWAITING_PAYMENT' };
   }
 }

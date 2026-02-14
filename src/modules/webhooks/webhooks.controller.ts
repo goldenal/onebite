@@ -47,17 +47,20 @@ export class WebhooksController {
     if (event.type === 'payment_intent.succeeded') {
       const pi: any = event.data.object;
       const metadata = pi.metadata || {};
-      const channel = (metadata.channel || 'web') as any;
-      const fulfillment = (metadata.fulfillment || 'pickup') as any;
       const now = new Date().toISOString();
       const id = this.kitchen.normalizeOrderId(metadata.order_id || metadata.cart_id || pi.id);
+      const payment = await this.prisma.paymentLink.findUnique({ where: { orderId: id } });
+      const channel = (payment?.channel || metadata.channel || 'web') as any;
+      const fulfillment = (payment?.fulfillment || metadata.fulfillment || 'pickup') as any;
 
       const pickupCode =
         fulfillment === 'pickup' && (channel === 'web' || channel === 'phone' || channel === 'ai')
           ? this.kitchen.generatePickupCode()
           : undefined;
 
-      const items = metadata.items ? this.safeJson(metadata.items, []) : [];
+      const rawItems =
+        payment && Array.isArray(payment.items) ? (payment.items as any[]) : metadata.items ? this.safeJson(metadata.items, []) : [];
+      const items = this.normalizeOrderItems(rawItems);
 
       const order = {
         id,
@@ -110,7 +113,7 @@ export class WebhooksController {
       });
 
       if (createdEvent && fulfillment === 'delivery') {
-        this.enqueueDeliveryCreation(id);
+     //   this.enqueueDeliveryCreation(id);
       }
     }
 
@@ -208,6 +211,25 @@ export class WebhooksController {
     } catch {
       return fallback;
     }
+  }
+
+  private normalizeOrderItems(items: any[]) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item: any) => {
+        const name = String(item?.menuItem?.name || item?.name || '').trim();
+        const qty = Number(item?.qty ?? item?.quantity ?? 1);
+        if (!name || !Number.isFinite(qty) || qty <= 0) return null;
+        return {
+          name,
+          qty: Math.floor(qty),
+          modifiers: Array.isArray(item?.modifiers) ? item.modifiers : [],
+          allergies: Array.isArray(item?.allergies) ? item.allergies : [],
+          station: item?.station ? String(item.station) : undefined,
+          notes: item?.notes ? String(item.notes) : undefined,
+        };
+      })
+      .filter(Boolean);
   }
 
   private enqueueDeliveryCreation(orderId: string) {
