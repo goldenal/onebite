@@ -112,6 +112,10 @@ export class WebhooksController {
         await this.kitchen.upsertOrderWithItemsTx(tx, order);
       });
 
+      if (createdEvent) {
+        void this.kitchen.broadcastOrdersSnapshot();
+      }
+
       if (createdEvent && fulfillment === 'delivery') {
      //   this.enqueueDeliveryCreation(id);
       }

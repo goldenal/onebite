@@ -20,6 +20,10 @@ export class KitchenController {
     });
     res.flushHeaders();
     res.write('retry: 5000\n\n');
+
+    const initialOrders = await this.kitchen.listOrders();
+    res.write(`data: ${JSON.stringify({ type: 'orders.snapshot', orders: initialOrders })}\n\n`);
+
     const { streamHub } = await import('../../common/stream/stream-hub');
     const clientId = streamHub.register(res);
 

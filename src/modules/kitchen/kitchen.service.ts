@@ -8,6 +8,15 @@ import type { Order, OrderItem, Status } from './kitchen.types';
 export class KitchenService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async broadcastOrdersSnapshot() {
+    try {
+      const orders = await this.listOrders();
+      streamHub.broadcast({ type: 'orders.snapshot', orders });
+    } catch {
+      // Snapshot broadcast should never break order workflows.
+    }
+  }
+
   generatePickupCode() {
     return String(randomInt(1000, 9999));
   }
@@ -85,7 +94,10 @@ export class KitchenService {
     await this.appendAudit(id, 'kitchen', target);
 
     const updated = await this.getOrder(id);
-    if (updated) streamHub.broadcast({ type: 'order.updated', order: updated });
+    if (updated) {
+      streamHub.broadcast({ type: 'order.updated', order: updated });
+      void this.broadcastOrdersSnapshot();
+    }
     return updated;
   }
 
@@ -107,6 +119,7 @@ export class KitchenService {
     if (updated) {
       streamHub.broadcast({ type: 'order.arrival', order_id: updated.id, arrival_status: 'arrived' });
       streamHub.broadcast({ type: 'order.updated', order: updated });
+      void this.broadcastOrdersSnapshot();
     }
     return updated;
   }
@@ -126,7 +139,10 @@ export class KitchenService {
     streamHub.broadcast({ type: 'order.delivery_update', order_id: orderId, driver_status });
 
     const updated = await this.getOrder(orderId);
-    if (updated) streamHub.broadcast({ type: 'order.updated', order: updated });
+    if (updated) {
+      streamHub.broadcast({ type: 'order.updated', order: updated });
+      void this.broadcastOrdersSnapshot();
+    }
     return updated;
   }
 
@@ -144,7 +160,10 @@ export class KitchenService {
     await this.prisma.order.update({ where: { id: orderId }, data: { pickupCode: code } });
     await this.appendAudit(orderId, 'system', 'pickup_code_generated', { pickupCode: code });
     const updated = await this.getOrder(orderId);
-    if (updated) streamHub.broadcast({ type: 'order.updated', order: updated });
+    if (updated) {
+      streamHub.broadcast({ type: 'order.updated', order: updated });
+      void this.broadcastOrdersSnapshot();
+    }
     return { pickup_code: code, order_id: orderId };
   }
 
@@ -189,6 +208,7 @@ export class KitchenService {
 
     await this.upsertOrderWithItems(order);
     streamHub.broadcast({ type: 'order.created', order });
+    void this.broadcastOrdersSnapshot();
     return { ok: true, order };
   }
 
@@ -233,7 +253,10 @@ export class KitchenService {
     });
 
     const updated = await this.getOrder(id);
-    if (updated) streamHub.broadcast({ type: 'order.updated', order: updated });
+    if (updated) {
+      streamHub.broadcast({ type: 'order.updated', order: updated });
+      void this.broadcastOrdersSnapshot();
+    }
     return updated;
   }
 
@@ -304,6 +327,7 @@ export class KitchenService {
     });
 
     demoOrders.forEach((o) => streamHub.broadcast({ type: 'order.created', order: o }));
+    void this.broadcastOrdersSnapshot();
     return { ok: true, seeded: demoOrders.length };
   }
 
