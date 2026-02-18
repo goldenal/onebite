@@ -30,9 +30,10 @@ export class StructuredAddressDto {
 }
 
 export class DeliveryQuoteDto {
-  @ApiProperty({ example: 'ord_12345' })
+  @ApiPropertyOptional({ example: 'ord_12345', description: 'Optional. Provide after cart/order creation to persist quote.' })
+  @IsOptional()
   @IsString()
-  order_id!: string;
+  order_id?: string;
 
   @ApiProperty({ example: 'loc_nj_1' })
   @IsString()

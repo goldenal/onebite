@@ -57,12 +57,15 @@ export class DeliveryService {
 
   async quote(dto: DeliveryQuoteDto) {
     try {
+      const orderId = dto.order_id?.trim() || null;
       const provider = dto.provider || 'uber_direct';
       if (provider !== 'uber_direct') throw new BadRequestException('unsupported_provider');
 
-      const payment = await this.prisma.paymentLink.findUnique({ where: { orderId: dto.order_id } });
-      if (!payment) throw new NotFoundException('order_not_found');
-      if (payment.fulfillment !== 'delivery') throw new BadRequestException('not_delivery');
+      if (orderId) {
+        const payment = await this.prisma.paymentLink.findUnique({ where: { orderId } });
+        if (!payment) throw new NotFoundException('order_not_found');
+        if (payment.fulfillment !== 'delivery') throw new BadRequestException('not_delivery');
+      }
 
       const location = await this.prisma.location.findUnique({ where: { id: dto.location_id } });
       if (!location) throw new NotFoundException('location_not_found');
@@ -86,66 +89,68 @@ export class DeliveryService {
 
       if (!quoteId) throw new BadRequestException('quote_failed');
 
-      await this.prisma.$transaction(async (tx) => {
-        await tx.deliveryAddress.upsert({
-          where: { orderId: dto.order_id },
-          update: {
-            locationId: dto.location_id,
-            name: dto.dropoff_name ?? null,
-            phone: dto.dropoff_phone ?? null,
-            addressLine1: dto.dropoff_address.address_line1,
-            addressLine2: dto.dropoff_address.address_line2 ?? null,
-            city: dto.dropoff_address.city,
-            state: dto.dropoff_address.state,
-            postalCode: dto.dropoff_address.postal_code,
-            country: dto.dropoff_address.country,
-            instructions: dto.dropoff_instructions ?? null,
-            updatedAt: new Date(),
-          },
-          create: {
-            orderId: dto.order_id,
-            locationId: dto.location_id,
-            name: dto.dropoff_name ?? null,
-            phone: dto.dropoff_phone ?? null,
-            addressLine1: dto.dropoff_address.address_line1,
-            addressLine2: dto.dropoff_address.address_line2 ?? null,
-            city: dto.dropoff_address.city,
-            state: dto.dropoff_address.state,
-            postalCode: dto.dropoff_address.postal_code,
-            country: dto.dropoff_address.country,
-            instructions: dto.dropoff_instructions ?? null,
-          },
-        });
+      if (orderId) {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.deliveryAddress.upsert({
+            where: { orderId },
+            update: {
+              locationId: dto.location_id,
+              name: dto.dropoff_name ?? null,
+              phone: dto.dropoff_phone ?? null,
+              addressLine1: dto.dropoff_address.address_line1,
+              addressLine2: dto.dropoff_address.address_line2 ?? null,
+              city: dto.dropoff_address.city,
+              state: dto.dropoff_address.state,
+              postalCode: dto.dropoff_address.postal_code,
+              country: dto.dropoff_address.country,
+              instructions: dto.dropoff_instructions ?? null,
+              updatedAt: new Date(),
+            },
+            create: {
+              orderId,
+              locationId: dto.location_id,
+              name: dto.dropoff_name ?? null,
+              phone: dto.dropoff_phone ?? null,
+              addressLine1: dto.dropoff_address.address_line1,
+              addressLine2: dto.dropoff_address.address_line2 ?? null,
+              city: dto.dropoff_address.city,
+              state: dto.dropoff_address.state,
+              postalCode: dto.dropoff_address.postal_code,
+              country: dto.dropoff_address.country,
+              instructions: dto.dropoff_instructions ?? null,
+            },
+          });
 
-        await tx.deliveryQuote.upsert({
-          where: { orderId: dto.order_id },
-          update: {
-            provider,
-            locationId: dto.location_id,
-            quoteId,
-            feeCents: Math.max(0, Math.round(feeAmount)),
-            currency,
-            eta,
-            expiresAt: expiresAt ?? null,
-            raw: quote ?? {},
-            updatedAt: new Date(),
-          },
-          create: {
-            orderId: dto.order_id,
-            provider,
-            locationId: dto.location_id,
-            quoteId,
-            feeCents: Math.max(0, Math.round(feeAmount)),
-            currency,
-            eta,
-            expiresAt: expiresAt ?? null,
-            raw: quote ?? {},
-          },
+          await tx.deliveryQuote.upsert({
+            where: { orderId },
+            update: {
+              provider,
+              locationId: dto.location_id,
+              quoteId,
+              feeCents: Math.max(0, Math.round(feeAmount)),
+              currency,
+              eta,
+              expiresAt: expiresAt ?? null,
+              raw: quote ?? {},
+              updatedAt: new Date(),
+            },
+            create: {
+              orderId,
+              provider,
+              locationId: dto.location_id,
+              quoteId,
+              feeCents: Math.max(0, Math.round(feeAmount)),
+              currency,
+              eta,
+              expiresAt: expiresAt ?? null,
+              raw: quote ?? {},
+            },
+          });
         });
-      });
+      }
 
       return {
-        order_id: dto.order_id,
+        order_id: orderId,
         quote_id: quoteId,
         fee_cents: Math.max(0, Math.round(feeAmount)),
         currency,

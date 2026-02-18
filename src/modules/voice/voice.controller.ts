@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Post, ServiceUnavailableException } from '@nestjs/common';
 import { ApiBody, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('voice')
@@ -8,6 +8,6 @@ export class VoiceController {
   @ApiBody({ schema: { example: { text: 'Your order will be ready shortly.' } } })
   async tts(@Body() body: { text: string }) {
     // Placeholder stub; ElevenLabs integration will be wired next.
-    return { error: 'elevenlabs_error', message: 'Not configured' };
+    throw new ServiceUnavailableException('elevenlabs_not_configured');
   }
 }
