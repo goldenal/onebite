@@ -91,7 +91,7 @@ export class DeliveryService {
         );
         throw new BadGatewayException({
           code: 'uber_quote_failed',
-          message: 'uber_quote_failed',
+          message: 'quote_failed',
           details: {
             provider: 'uber_direct',
             provider_error: providerMessage,
