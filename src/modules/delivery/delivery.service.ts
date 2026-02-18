@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   HttpException,
   Injectable,
@@ -79,7 +80,24 @@ export class DeliveryService {
         country: location.country,
       });
       const dropoff = this.uber.toUberAddress(dto.dropoff_address);
-      const quote = await this.uber.createQuote({ pickup, dropoff });
+      let quote: any;
+      try {
+        quote = await this.uber.createQuote({ pickup, dropoff });
+      } catch (error) {
+        const providerMessage = error instanceof Error ? error.message : String(error);
+        this.logger.error(
+          `quote provider error: ${providerMessage}`,
+          error instanceof Error ? error.stack : undefined,
+        );
+        throw new BadGatewayException({
+          code: 'uber_quote_failed',
+          message: 'uber_quote_failed',
+          details: {
+            provider: 'uber_direct',
+            provider_error: providerMessage,
+          },
+        });
+      }
 
       const quoteId = String(quote.id || quote.quote_id || '');
       const feeAmount = Number(quote.fee?.amount ?? quote.fee?.value ?? quote.fee ?? 0);
