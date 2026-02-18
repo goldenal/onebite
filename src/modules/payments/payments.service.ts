@@ -274,7 +274,7 @@ export class PaymentsService {
     if (resolvedItems.length) lineItems = this.toStripeLineItems(resolvedItems, currency);
 
     if (payment.fulfillment === 'delivery') {
-      const quote = await (this.prisma as any).deliveryQuote.findUnique({ where: { quote_id: dto.quote_id } });
+      const quote = await (this.prisma as any).deliveryQuote.findUnique({ where: { orderId: dto.order_id } });
       if (!quote) throw new BadRequestException('delivery_quote_required');
       if (dto.quote_id && dto.quote_id !== quote.quoteId) throw new BadRequestException('quote_mismatch');
       if (quote.expiresAt && quote.expiresAt.getTime() < Date.now()) throw new BadRequestException('quote_expired');
