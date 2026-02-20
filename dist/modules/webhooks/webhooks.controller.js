@@ -26,6 +26,7 @@ const prisma_service_1 = require("../../prisma/prisma.service");
 const client_1 = require("@prisma/client");
 const crypto_1 = require("crypto");
 const delivery_service_1 = require("../delivery/delivery.service");
+const error_response_1 = require("../../common/errors/error-response");
 let WebhooksController = WebhooksController_1 = class WebhooksController {
     constructor(config, kitchen, prisma, delivery) {
         this.config = config;
@@ -40,18 +41,29 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
     async stripeWebhook(req, res, sig) {
         const webhookSecret = this.config.get('STRIPE_WEBHOOK_SECRET');
         if (!webhookSecret) {
-            return res.status(500).json({ error: 'server_not_configured', message: 'STRIPE_WEBHOOK_SECRET required' });
+            return res
+                .status(common_1.HttpStatus.INTERNAL_SERVER_ERROR)
+                .json((0, error_response_1.createErrorEnvelope)({
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+                code: 'server_not_configured',
+                message: 'stripe_webhook_secret_required',
+                path: req.url,
+            }));
         }
         let event;
         try {
             const rawBody = req.rawBody;
             if (!rawBody) {
-                return res.status(400).json({ error: 'invalid_signature' });
+                return res
+                    .status(common_1.HttpStatus.BAD_REQUEST)
+                    .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'invalid_signature', path: req.url }));
             }
             event = this.stripe.webhooks.constructEvent(rawBody, sig || '', webhookSecret);
         }
         catch {
-            return res.status(400).json({ error: 'invalid_signature' });
+            return res
+                .status(common_1.HttpStatus.BAD_REQUEST)
+                .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'invalid_signature', path: req.url }));
         }
         if (event.type === 'payment_intent.succeeded') {
             const pi = event.data.object;
@@ -131,14 +143,27 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
         if (uberSignature) {
             const secret = this.config.get('UBER_DIRECT_WEBHOOK_SECRET');
             if (!secret) {
-                return res.status(500).json({ error: 'server_not_configured', message: 'UBER_DIRECT_WEBHOOK_SECRET required' });
+                return res
+                    .status(common_1.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .json((0, error_response_1.createErrorEnvelope)({
+                    statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+                    code: 'server_not_configured',
+                    message: 'uber_direct_webhook_secret_required',
+                    path: req.url,
+                }));
             }
             const rawBody = req.rawBody;
-            if (!rawBody)
-                return res.status(400).json({ error: 'invalid_signature' });
+            if (!rawBody) {
+                return res
+                    .status(common_1.HttpStatus.BAD_REQUEST)
+                    .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'invalid_signature', path: req.url }));
+            }
             const computed = (0, crypto_1.createHmac)('sha256', secret).update(rawBody).digest('hex');
-            if (computed !== uberSignature)
-                return res.status(400).json({ error: 'invalid_signature' });
+            if (computed !== uberSignature) {
+                return res
+                    .status(common_1.HttpStatus.BAD_REQUEST)
+                    .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'invalid_signature', path: req.url }));
+            }
             const payload = req.body || {};
             const data = payload.data || payload;
             const deliveryId = data.delivery_id || data.id || payload.delivery_id;
@@ -149,8 +174,11 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
                 const row = await this.prisma.deliveryRequest.findFirst({ where: { deliveryId } });
                 orderId = row?.orderId;
             }
-            if (!orderId || !status)
-                return res.status(400).json({ error: 'bad_request' });
+            if (!orderId || !status) {
+                return res
+                    .status(common_1.HttpStatus.BAD_REQUEST)
+                    .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'bad_request', path: req.url }));
+            }
             await this.prisma.deliveryRequest.upsert({
                 where: { orderId },
                 update: {
@@ -180,11 +208,15 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
         }
         const token = this.config.get('DELIVERY_WEBHOOK_TOKEN');
         if (token && req.headers.authorization !== `Bearer ${token}`) {
-            return res.status(401).json({ error: 'unauthorized' });
+            return res
+                .status(common_1.HttpStatus.UNAUTHORIZED)
+                .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.UNAUTHORIZED, code: 'unauthorized', path: req.url }));
         }
         const payload = req.body;
         if (!payload?.order_ref || !payload?.event) {
-            return res.status(400).json({ error: 'bad_request' });
+            return res
+                .status(common_1.HttpStatus.BAD_REQUEST)
+                .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'bad_request', path: req.url }));
         }
         await this.kitchen.updateDelivery(payload.order_ref, payload.event, payload.driver_status);
         return res.json({ ok: true });

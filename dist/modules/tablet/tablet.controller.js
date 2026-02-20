@@ -38,7 +38,7 @@ let TabletController = class TabletController {
     async orderStatus(body) {
         const status = this.tablet.normalizeOrderStatus(body.orderStatus);
         if (!status)
-            return { error: 'invalid_order_status' };
+            throw new common_1.BadRequestException('invalid_order_status');
         const result = await this.tablet.touchSession({
             tabletId: body.tabletId.trim(),
             orderStatusOverride: status,

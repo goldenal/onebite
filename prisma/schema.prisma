@@ -7,8 +7,189 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Tenant {
+  id        String   @id
+  slug      String   @unique
+  name      String
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  domains                TenantDomain[]
+  subscriptions          Subscription[]
+  stripeAccount          TenantStripeAccount?
+  memberships            TenantMembership[]
+  customerAccounts       CustomerAccount[]
+  contents               TenantContent[]
+  processedWebhookEvents ProcessedWebhookEvent[]
+  settings               TenantSetting[]
+  locations              Location[]
+  orders                 Order[]
+  orderItems             OrderItem[]
+  auditEntries           AuditEntry[]
+  processedEvents        ProcessedEvent[]
+  menuItems              MenuItem[]
+  inventoryItems         InventoryItem[]
+  reservations           Reservation[]
+  customerReviews        CustomerReview[]
+  reviewReplies          ReviewReply[]
+  promotions             Promotion[]
+  groupOrders            GroupOrder[]
+  groupOrderItems        GroupOrderItem[]
+  legacyOrders           LegacyOrder[]
+  tabletSessions         TabletSession[]
+  staffUsers             StaffUser[]
+  reviewAccessTokens     ReviewAccessToken[]
+
+  @@map("tenants")
+}
+
+model TenantDomain {
+  id         String    @id
+  tenantId   String    @map("tenant_id")
+  domain     String    @unique
+  isPrimary  Boolean   @default(false) @map("is_primary")
+  verifiedAt DateTime? @map("verified_at") @db.Timestamptz(6)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tenantId], map: "idx_tenant_domains_tenant_id")
+  @@map("tenant_domains")
+}
+
+model Plan {
+  id                String   @id
+  code              String   @unique
+  name              String
+  monthlyPriceCents Int      @map("monthly_price_cents")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id                 String   @id
+  tenantId           String   @map("tenant_id")
+  planId             String   @map("plan_id")
+  status             String
+  currentPeriodStart DateTime @map("current_period_start") @db.Timestamptz(6)
+  currentPeriodEnd   DateTime @map("current_period_end") @db.Timestamptz(6)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  plan               Plan     @relation(fields: [planId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([tenantId], map: "idx_subscriptions_tenant_id")
+  @@index([planId], map: "idx_subscriptions_plan_id")
+  @@index([tenantId, status], map: "idx_subscriptions_tenant_status")
+  @@map("subscriptions")
+}
+
+model TenantStripeAccount {
+  tenantId           String   @id @map("tenant_id")
+  connectAccountId   String?  @unique @map("connect_account_id")
+  chargesEnabled     Boolean  @default(false) @map("charges_enabled")
+  payoutsEnabled     Boolean  @default(false) @map("payouts_enabled")
+  detailsSubmitted   Boolean  @default(false) @map("details_submitted")
+  onboardingComplete Boolean  @default(false) @map("onboarding_complete")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("tenant_stripe_accounts")
+}
+
+model User {
+  id           String   @id
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  memberships TenantMembership[]
+
+  @@map("users")
+}
+
+model TenantMembership {
+  id          String   @id
+  tenantId    String   @map("tenant_id")
+  userId      String   @map("user_id")
+  role        String
+  locationIds Json?    @map("location_ids")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenantId, userId], map: "tenant_memberships_tenant_id_user_id_key")
+  @@index([tenantId], map: "idx_tenant_memberships_tenant_id")
+  @@index([userId], map: "idx_tenant_memberships_user_id")
+  @@map("tenant_memberships")
+}
+
+model CustomerAccount {
+  id           String   @id
+  tenantId     String   @map("tenant_id")
+  email        String
+  passwordHash String   @map("password_hash")
+  firstName    String?  @map("first_name")
+  lastName     String?  @map("last_name")
+  phone        String?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenantId, email], map: "customer_accounts_tenant_id_email_key")
+  @@index([tenantId], map: "idx_customer_accounts_tenant_id")
+  @@map("customer_accounts")
+}
+
+model TenantContent {
+  id          String   @id
+  tenantId    String   @map("tenant_id")
+  contentType String   @map("content_type")
+  content     Json
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenantId, contentType], map: "tenant_content_tenant_id_content_type_key")
+  @@index([tenantId], map: "idx_tenant_content_tenant_id")
+  @@map("tenant_content")
+}
+
+model ProcessedWebhookEvent {
+  id        String   @id
+  provider  String
+  eventId   String   @map("event_id")
+  tenantId  String?  @map("tenant_id")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([provider, eventId], map: "processed_webhook_events_provider_event_id_key")
+  @@index([tenantId], map: "idx_processed_webhook_events_tenant_id")
+  @@map("processed_webhook_events")
+}
+
+model TenantSetting {
+  id        Int       @id @default(autoincrement())
+  tenantId  String    @map("tenant_id")
+  key       String
+  value     Json
+  updatedAt DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tenantId, key], map: "tenant_settings_tenant_id_key_key")
+  @@index([tenantId], map: "idx_tenant_settings_tenant_id")
+  @@map("tenant_settings")
+}
+
 model Order {
   id                  String       @id
+  tenantId            String       @default("tenant_legacy_default") @map("tenant_id")
+  locationId          String?      @map("location_id")
   channel             String
   fulfillment         String
   sourceLabel         String?      @map("source_label")
@@ -23,52 +204,74 @@ model Order {
   deliveredAt         DateTime?    @map("delivered_at") @db.Timestamptz(6)
   prepEstimateMinutes Int?         @map("prep_estimate_minutes")
   priorityFlag        Boolean?     @default(false) @map("priority_flag")
+  tenant              Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  location            Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull, onUpdate: NoAction)
   audit               AuditEntry[]
   items               OrderItem[]
 
   @@index([channel], map: "idx_orders_channel")
   @@index([fulfillment], map: "idx_orders_fulfillment")
   @@index([status], map: "idx_orders_status")
+  @@index([tenantId], map: "idx_orders_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_orders_tenant_created_at")
+  @@index([tenantId, status], map: "idx_orders_tenant_status")
+  @@index([tenantId, locationId], map: "idx_orders_tenant_location_id")
   @@map("orders")
 }
 
 model OrderItem {
-  id        Int     @id @default(autoincrement())
-  orderId   String? @map("order_id")
-  name      String?
-  qty       Int?
-  modifiers Json?
-  allergies Json?
-  station   String?
-  notes     String?
-  order     Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id         Int       @id @default(autoincrement())
+  orderId    String?   @map("order_id")
+  tenantId   String    @default("tenant_legacy_default") @map("tenant_id")
+  locationId String?   @map("location_id")
+  name       String?
+  qty        Int?
+  modifiers  Json?
+  allergies  Json?
+  station    String?
+  notes      String?
+  order      Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  location   Location? @relation(fields: [locationId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([orderId], map: "idx_order_items_order_id")
+  @@index([tenantId], map: "idx_order_items_tenant_id")
+  @@index([tenantId, orderId], map: "idx_order_items_tenant_order_id")
+  @@index([tenantId, locationId], map: "idx_order_items_tenant_location_id")
   @@map("order_items")
 }
 
 model AuditEntry {
-  id      Int      @id @default(autoincrement())
-  orderId String?  @map("order_id")
-  ts      DateTime @db.Timestamptz(6)
-  actor   String?
-  action  String?
-  details Json?
-  order   Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  id       Int      @id @default(autoincrement())
+  orderId  String?  @map("order_id")
+  tenantId String?  @default("tenant_legacy_default") @map("tenant_id")
+  ts       DateTime @db.Timestamptz(6)
+  actor    String?
+  action   String?
+  details  Json?
+  order    Order?   @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tenant   Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([orderId], map: "idx_audit_order_id")
+  @@index([tenantId], map: "idx_audit_tenant_id")
+  @@index([tenantId, ts], map: "idx_audit_tenant_ts")
   @@map("audit")
 }
 
 model ProcessedEvent {
-  eventId String  @id @map("event_id")
-  source  String?
+  eventId  String  @id @map("event_id")
+  tenantId String  @default("tenant_legacy_default") @map("tenant_id")
+  source   String?
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_processed_events_tenant_id")
   @@map("processed_events")
 }
 
 model MenuItem {
   id           String    @id
+  tenantId     String    @default("tenant_legacy_default") @map("tenant_id")
+  locationId   String?   @map("location_id")
   name         String
   description  String?
   price        Decimal?  @db.Decimal
@@ -81,12 +284,19 @@ model MenuItem {
   includes     Json?     @default("[]")
   notes        String?
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  location     Location? @relation(fields: [locationId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_menu_items_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_menu_items_tenant_created_at")
+  @@index([tenantId, locationId], map: "idx_menu_items_tenant_location_id")
   @@map("menu_items")
 }
 
 model InventoryItem {
   itemId        String    @id @map("item_id")
+  tenantId      String    @default("tenant_legacy_default") @map("tenant_id")
+  locationId    String?   @map("location_id")
   itemName      String    @map("item_name")
   currentStock  Int?      @map("current_stock")
   minStock      Int?      @map("min_stock")
@@ -95,7 +305,12 @@ model InventoryItem {
   status        String?
   autoReorder   Boolean?  @map("auto_reorder")
   lastRestocked DateTime? @map("last_restocked") @db.Timestamptz(6)
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  location      Location? @relation(fields: [locationId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_inventory_tenant_id")
+  @@index([tenantId, status], map: "idx_inventory_tenant_status")
+  @@index([tenantId, locationId], map: "idx_inventory_tenant_location_id")
   @@map("inventory")
 }
 
@@ -109,11 +324,17 @@ model Setting {
 
 model StaffUser {
   id           Int       @id @default(autoincrement())
+  tenantId     String?   @default("tenant_legacy_default") @map("tenant_id")
+  locationId   String?   @map("location_id")
   username     String    @unique
   passwordHash String    @map("password_hash")
   role         String
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  location     Location? @relation(fields: [locationId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_staff_users_tenant_id")
+  @@index([tenantId, locationId], map: "idx_staff_users_tenant_location_id")
   @@map("staff_users")
 }
 
@@ -134,23 +355,32 @@ model Session {
 }
 
 model Reservation {
-  id              String  @id
+  id              String    @id
+  tenantId        String    @default("tenant_legacy_default") @map("tenant_id")
+  locationId      String?   @map("location_id")
   name            String
   email           String
   phone           String
   guests          String
   date            String
   time            String
-  specialRequests String? @map("special_requests")
+  specialRequests String?   @map("special_requests")
   status          String?
   notes           String?
-  createdAt       BigInt  @map("created_at")
+  createdAt       BigInt    @map("created_at")
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  location        Location? @relation(fields: [locationId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_reservations_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_reservations_tenant_created_at")
+  @@index([tenantId, status], map: "idx_reservations_tenant_status")
+  @@index([tenantId, locationId], map: "idx_reservations_tenant_location_id")
   @@map("reservations")
 }
 
 model CustomerReview {
   id         String        @id
+  tenantId   String        @default("tenant_legacy_default") @map("tenant_id")
   name       String?
   email      String?
   rating     Int?
@@ -161,36 +391,48 @@ model CustomerReview {
   visible    Boolean?
   adminNotes String?       @map("admin_notes")
   createdAt  BigInt?       @map("created_at")
+  tenant     Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   replies    ReviewReply[]
 
+  @@index([tenantId], map: "idx_customer_reviews_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_customer_reviews_tenant_created_at")
   @@map("customer_reviews")
 }
 
 model ReviewReply {
   id         String          @id
+  tenantId   String          @default("tenant_legacy_default") @map("tenant_id")
   reviewId   String?         @map("review_id")
   senderType String?         @map("sender_type")
   senderName String?         @map("sender_name")
   message    String?
   isRead     Boolean?        @map("is_read")
   createdAt  BigInt?         @map("created_at")
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   review     CustomerReview? @relation(fields: [reviewId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([reviewId], map: "idx_review_replies_review_id")
+  @@index([tenantId], map: "idx_review_replies_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_review_replies_tenant_created_at")
   @@map("review_replies")
 }
 
 model ReviewAccessToken {
   email           String    @id
+  tenantId        String?   @default("tenant_legacy_default") @map("tenant_id")
   accessToken     String    @map("access_token")
   expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
   createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   lastRequestedAt DateTime? @default(now()) @map("last_requested_at") @db.Timestamptz(6)
+  tenant          Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_review_access_tokens_tenant_id")
   @@map("review_access_tokens")
 }
 
 model Promotion {
   id                   String   @id
+  tenantId             String   @default("tenant_legacy_default") @map("tenant_id")
   name                 String?
   description          String?
   type                 String?
@@ -208,23 +450,33 @@ model Promotion {
   timeStart            String?  @map("time_start")
   timeEnd              String?  @map("time_end")
   createdAt            BigInt?  @map("created_at")
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_promotions_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_promotions_tenant_created_at")
+  @@index([tenantId, active], map: "idx_promotions_tenant_active")
   @@map("promotions")
 }
 
 model GroupOrder {
   id            String           @id
+  tenantId      String           @default("tenant_legacy_default") @map("tenant_id")
   initiatorName String?          @map("initiator_name")
   status        String?
   createdAt     BigInt?          @map("created_at")
   expiresAt     BigInt?          @map("expires_at")
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   items         GroupOrderItem[]
 
+  @@index([tenantId], map: "idx_group_orders_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_group_orders_tenant_created_at")
+  @@index([tenantId, status], map: "idx_group_orders_tenant_status")
   @@map("group_orders")
 }
 
 model GroupOrderItem {
   id                  String      @id
+  tenantId            String      @default("tenant_legacy_default") @map("tenant_id")
   groupOrderId        String?     @map("group_order_id")
   participantName     String?     @map("participant_name")
   menuItemId          String?     @map("menu_item_id")
@@ -236,13 +488,18 @@ model GroupOrderItem {
   selectedOptions     Json?       @map("selected_options")
   specialInstructions String?     @map("special_instructions")
   createdAt           BigInt?     @map("created_at")
+  tenant              Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   groupOrder          GroupOrder? @relation(fields: [groupOrderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_group_order_items_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_group_order_items_tenant_created_at")
+  @@index([tenantId, groupOrderId], map: "idx_group_order_items_tenant_group_order_id")
   @@map("group_order_items")
 }
 
 model LegacyOrder {
   id            String    @id
+  tenantId      String    @default("tenant_legacy_default") @map("tenant_id")
   items         Json?
   total         Decimal?  @db.Decimal
   status        String?
@@ -251,7 +508,11 @@ model LegacyOrder {
   estimatedTime Int?      @map("estimated_time")
   timestamp     BigInt?
   createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_legacy_orders_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_legacy_orders_tenant_created_at")
+  @@index([tenantId, status], map: "idx_legacy_orders_tenant_status")
   @@map("legacy_orders")
 }
 
@@ -273,34 +534,45 @@ model PaymentLink {
 }
 
 model Location {
-  id           String   @id
+  id           String    @id
+  tenantId     String    @default("tenant_legacy_default") @map("tenant_id")
   name         String
   phone        String
-  addressLine1 String   @map("address_line1")
-  addressLine2 String?  @map("address_line2")
+  addressLine1 String    @map("address_line1")
+  addressLine2 String?   @map("address_line2")
   city         String
   state        String
-  postalCode   String   @map("postal_code")
+  postalCode   String    @map("postal_code")
   country      String
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
   deliveryQuotes    DeliveryQuote[]
   deliveryAddresses DeliveryAddress[]
+  orders            Order[]
+  orderItems        OrderItem[]
+  reservations      Reservation[]
+  tabletSessions    TabletSession[]
+  inventoryItems    InventoryItem[]
+  menuItems         MenuItem[]
+  staffUsers        StaffUser[]
 
+  @@index([tenantId], map: "idx_locations_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_locations_tenant_created_at")
   @@map("locations")
 }
 
 model DeliveryAddress {
-  orderId      String   @id @map("order_id")
-  locationId   String   @map("location_id")
+  orderId      String    @id @map("order_id")
+  locationId   String    @map("location_id")
   name         String?
   phone        String?
-  addressLine1 String   @map("address_line1")
-  addressLine2 String?  @map("address_line2")
+  addressLine1 String    @map("address_line1")
+  addressLine2 String?   @map("address_line2")
   city         String
   state        String
-  postalCode   String   @map("postal_code")
+  postalCode   String    @map("postal_code")
   country      String
   instructions String?
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
@@ -312,11 +584,11 @@ model DeliveryAddress {
 }
 
 model DeliveryQuote {
-  orderId    String   @id @map("order_id")
+  orderId    String    @id @map("order_id")
   provider   String
-  locationId String   @map("location_id")
-  quoteId    String   @map("quote_id")
-  feeCents   Int      @map("fee_cents")
+  locationId String    @map("location_id")
+  quoteId    String    @map("quote_id")
+  feeCents   Int       @map("fee_cents")
   currency   String
   eta        String?
   expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
@@ -342,6 +614,8 @@ model DeliveryRequest {
 
 model TabletSession {
   tabletId              String    @id @map("tablet_id")
+  tenantId              String    @default("tenant_legacy_default") @map("tenant_id")
+  locationId            String?   @map("location_id")
   sessionId             String    @map("session_id")
   questionCount         Int       @default(0) @map("question_count")
   lastActivityTimestamp DateTime  @map("last_activity_timestamp") @db.Timestamptz(6)
@@ -351,7 +625,13 @@ model TabletSession {
   conversationHistory   Json?     @default("[]") @map("conversation_history")
   createdAt             DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt             DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  location              Location? @relation(fields: [locationId], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([lastActivityTimestamp], map: "idx_tablet_sessions_last_activity")
+  @@index([tenantId], map: "idx_tablet_sessions_tenant_id")
+  @@index([tenantId, createdAt], map: "idx_tablet_sessions_tenant_created_at")
+  @@index([tenantId, orderStatus], map: "idx_tablet_sessions_tenant_order_status")
+  @@index([tenantId, locationId], map: "idx_tablet_sessions_tenant_location_id")
   @@map("tablet_sessions")
 }

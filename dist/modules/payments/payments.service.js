@@ -281,6 +281,7 @@ let PaymentsService = class PaymentsService {
                 quantity: 1,
             });
         }
+        //
         const totalCents = lineItems.reduce((sum, li) => sum + (li.price_data?.unit_amount || 0) * (li.quantity || 1), 0);
         const amount = totalCents / 100;
         if (!Number.isFinite(amount) || amount <= 0)

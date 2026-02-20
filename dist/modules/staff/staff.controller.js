@@ -18,6 +18,7 @@ const swagger_1 = require("@nestjs/swagger");
 const config_1 = require("@nestjs/config");
 const auth_service_1 = require("../auth/auth.service");
 const auth_util_1 = require("../auth/auth.util");
+const error_response_1 = require("../../common/errors/error-response");
 let StaffController = class StaffController {
     constructor(auth, config) {
         this.auth = auth;
@@ -37,22 +38,44 @@ let StaffController = class StaffController {
     }
     verify(req, res) {
         const portalCode = this.auth.getStaffPortalCode();
-        if (!portalCode)
-            return res.status(500).json({ ok: false });
+        if (!portalCode) {
+            return res
+                .status(common_1.HttpStatus.INTERNAL_SERVER_ERROR)
+                .json((0, error_response_1.createErrorEnvelope)({
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+                code: 'staff_code_not_configured',
+                path: req.url,
+            }));
+        }
         const secret = this.config.get('JWT_SECRET');
-        if (!secret)
-            return res.status(500).json({ ok: false });
+        if (!secret) {
+            return res
+                .status(common_1.HttpStatus.INTERNAL_SERVER_ERROR)
+                .json((0, error_response_1.createErrorEnvelope)({
+                statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR,
+                code: 'jwt_secret_required',
+                path: req.url,
+            }));
+        }
         const token = (0, auth_util_1.getBearerToken)(req);
-        if (!token)
-            return res.status(401).json({ ok: false });
+        if (!token) {
+            return res
+                .status(common_1.HttpStatus.UNAUTHORIZED)
+                .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.UNAUTHORIZED, code: 'unauthorized', path: req.url }));
+        }
         try {
             const ok = (0, auth_util_1.verifyStaffToken)(token, secret);
-            if (!ok)
-                return res.status(401).json({ ok: false });
+            if (!ok) {
+                return res
+                    .status(common_1.HttpStatus.UNAUTHORIZED)
+                    .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.UNAUTHORIZED, code: 'unauthorized', path: req.url }));
+            }
             return res.json({ ok: true });
         }
         catch {
-            return res.status(401).json({ ok: false });
+            return res
+                .status(common_1.HttpStatus.UNAUTHORIZED)
+                .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.UNAUTHORIZED, code: 'unauthorized', path: req.url }));
         }
     }
     logout() {

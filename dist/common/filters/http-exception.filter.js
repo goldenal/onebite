@@ -8,6 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.HttpExceptionFilter = void 0;
 const common_1 = require("@nestjs/common");
+const error_response_1 = require("../errors/error-response");
 let HttpExceptionFilter = class HttpExceptionFilter {
     catch(exception, host) {
         const ctx = host.switchToHttp();
@@ -15,14 +16,24 @@ let HttpExceptionFilter = class HttpExceptionFilter {
         const request = ctx.getRequest();
         const isHttp = exception instanceof common_1.HttpException;
         const status = isHttp ? exception.getStatus() : common_1.HttpStatus.INTERNAL_SERVER_ERROR;
-        const payload = isHttp ? exception.getResponse() : { message: 'Internal server error' };
-        const message = typeof payload === 'string' ? payload : payload.message;
-        response.status(status).json({
-            error: isHttp ? common_1.HttpStatus[status] : 'InternalServerError',
-            message,
+        const payload = isHttp ? exception.getResponse() : null;
+        const payloadObject = payload && typeof payload === 'object' ? payload : {};
+        const payloadMessage = typeof payload === 'string' ? payload : payloadObject.message;
+        const details = Array.isArray(payloadMessage) ? payloadMessage : payloadObject.details;
+        const message = Array.isArray(payloadMessage) ? 'validation_failed' : typeof payloadMessage === 'string' ? payloadMessage : '';
+        const codeCandidate = typeof payloadObject.code === 'string'
+            ? payloadObject.code
+            : typeof payloadObject.error === 'string'
+                ? payloadObject.error
+                : message;
+        const body = (0, error_response_1.createErrorEnvelope)({
+            statusCode: status,
+            code: codeCandidate,
+            message: message || (isHttp ? String(common_1.HttpStatus[status] || '') : 'internal_server_error'),
+            details,
             path: request.url,
-            timestamp: new Date().toISOString(),
         });
+        response.status(status).json(body);
     }
 };
 exports.HttpExceptionFilter = HttpExceptionFilter;

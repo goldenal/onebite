@@ -24,7 +24,7 @@ let AgentController = class AgentController {
     async confirmPayment(body) {
         const cartId = body?.cart_id;
         if (!cartId)
-            return { error: 'bad_request', message: 'cart_id required' };
+            throw new common_1.BadRequestException('cart_id_required');
         const orderId = `ord_${cartId}`;
         const order = await this.kitchen.getOrder(orderId);
         return { paid: !!order, order_id: order ? order.id : null };
@@ -32,7 +32,7 @@ let AgentController = class AgentController {
     async generatePickup(body) {
         const orderId = body?.order_id;
         if (!orderId)
-            return { error: 'bad_request', message: 'order_id required' };
+            throw new common_1.BadRequestException('order_id_required');
         return this.kitchen.generatePickup(orderId);
     }
 };

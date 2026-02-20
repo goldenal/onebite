@@ -18,7 +18,7 @@ const swagger_1 = require("@nestjs/swagger");
 let VoiceController = class VoiceController {
     async tts(body) {
         // Placeholder stub; ElevenLabs integration will be wired next.
-        return { error: 'elevenlabs_error', message: 'Not configured' };
+        throw new common_1.ServiceUnavailableException('elevenlabs_not_configured');
     }
 };
 exports.VoiceController = VoiceController;
