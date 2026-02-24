@@ -37,6 +37,10 @@ model Tenant {
   groupOrders            GroupOrder[]
   groupOrderItems        GroupOrderItem[]
   legacyOrders           LegacyOrder[]
+  paymentLinks           PaymentLink[]
+  deliveryAddresses      DeliveryAddress[]
+  deliveryQuotes         DeliveryQuote[]
+  deliveryRequests       DeliveryRequest[]
   tabletSessions         TabletSession[]
   staffUsers             StaffUser[]
   reviewAccessTokens     ReviewAccessToken[]
@@ -517,19 +521,27 @@ model LegacyOrder {
 }
 
 model PaymentLink {
-  orderId       String    @id @map("order_id")
-  userId        String?   @map("user_id")
-  amount        Decimal?  @db.Decimal
-  state         String?
-  paymentLink   String?   @map("payment_link")
-  fulfillment   String?
-  channel       String?
-  items         Json?
-  customerName  String?   @map("customer_name")
-  customerPhone String?   @map("customer_phone")
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  orderId             String    @id @map("order_id")
+  tenantId            String    @default("tenant_legacy_default") @map("tenant_id")
+  userId              String?   @map("user_id")
+  amount              Decimal?  @db.Decimal
+  subtotalCents       Int?      @map("subtotal_cents")
+  taxCents            Int?      @map("tax_cents")
+  deliveryFeeCents    Int?      @map("delivery_fee_cents")
+  applicationFeeCents Int?      @map("application_fee_cents")
+  connectedAccountId  String?   @map("connected_account_id")
+  state               String?
+  paymentLink         String?   @map("payment_link")
+  fulfillment         String?
+  channel             String?
+  items               Json?
+  customerName        String?   @map("customer_name")
+  customerPhone       String?   @map("customer_phone")
+  createdAt           DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_payment_links_tenant_id")
   @@map("payment_links")
 }
 
@@ -565,6 +577,7 @@ model Location {
 
 model DeliveryAddress {
   orderId      String    @id @map("order_id")
+  tenantId     String    @default("tenant_legacy_default") @map("tenant_id")
   locationId   String    @map("location_id")
   name         String?
   phone        String?
@@ -578,13 +591,16 @@ model DeliveryAddress {
   createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt    DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
 
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   location Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
 
+  @@index([tenantId], map: "idx_delivery_addresses_tenant_id")
   @@map("delivery_addresses")
 }
 
 model DeliveryQuote {
   orderId    String    @id @map("order_id")
+  tenantId   String    @default("tenant_legacy_default") @map("tenant_id")
   provider   String
   locationId String    @map("location_id")
   quoteId    String    @map("quote_id")
@@ -596,19 +612,24 @@ model DeliveryQuote {
   createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt  DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
 
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   location Location @relation(fields: [locationId], references: [id], onDelete: Restrict)
 
+  @@index([tenantId], map: "idx_delivery_quotes_tenant_id")
   @@map("delivery_quotes")
 }
 
 model DeliveryRequest {
   orderId    String    @id @map("order_id")
+  tenantId   String    @default("tenant_legacy_default") @map("tenant_id")
   provider   String?
   deliveryId String?   @map("delivery_id")
   status     String?
   eta        String?
   updatedAt  DateTime? @default(now()) @map("updated_at") @db.Timestamptz(6)
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: NoAction)
 
+  @@index([tenantId], map: "idx_delivery_requests_tenant_id")
   @@map("delivery_requests")
 }
 

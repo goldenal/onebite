@@ -3,16 +3,20 @@ import { ApiBearerAuth, ApiBody, ApiTags } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { KitchenService } from './kitchen.service';
 import { KitchenAccessGuard } from '../auth/auth.guard';
+import { CurrentTenant } from '../../common/tenant/current-tenant.decorator';
+import type { TenantContext } from '../../common/tenant/tenant.types';
+import { TenantRequiredGuard } from '../../common/tenant/tenant-required.guard';
 
 @ApiTags('kitchen')
 @ApiBearerAuth('bearer')
 @Controller('kitchen')
+@UseGuards(TenantRequiredGuard)
 export class KitchenController {
   constructor(private readonly kitchen: KitchenService) {}
 
   @Get('stream')
   @UseGuards(KitchenAccessGuard)
-  async stream(@Req() req: Request, @Res() res: Response) {
+  async stream(@Req() req: Request, @Res() res: Response, @CurrentTenant() tenant: TenantContext) {
     res.set({
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
@@ -21,11 +25,18 @@ export class KitchenController {
     res.flushHeaders();
     res.write('retry: 5000\n\n');
 
-    const initialOrders = await this.kitchen.listOrders();
+    const initialOrders = await this.kitchen.listOrders(tenant.id);
     res.write(`data: ${JSON.stringify({ type: 'orders.snapshot', orders: initialOrders })}\n\n`);
 
     const { streamHub } = await import('../../common/stream/stream-hub');
-    const clientId = streamHub.register(res);
+    const clientId = streamHub.register(
+      res,
+      (message) => !message.tenantId || message.tenantId === tenant.id,
+      (message) => {
+        const { tenantId, ...payload } = message as Record<string, unknown>;
+        return payload;
+      },
+    );
 
     const interval = setInterval(() => {
       res.write(': keep-alive\n\n');
@@ -38,8 +49,9 @@ export class KitchenController {
   }
 
   @Get('orders/:id/status')
-  async getOrderStatus(@Param('id') id: string) {
-    const order = await this.kitchen.getOrder(id);
+  @UseGuards(KitchenAccessGuard)
+  async getOrderStatus(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    const order = await this.kitchen.getOrder(tenant.id, id);
     if (!order) return null;
     return {
       order_id: order.id,
@@ -52,8 +64,13 @@ export class KitchenController {
 
   @Get('orders')
   @UseGuards(KitchenAccessGuard)
-  async list(@Query('status') status?: string, @Query('channel') channel?: string, @Query('fulfillment') fulfillment?: string) {
-    const orders = await this.kitchen.listOrders({
+  async list(
+    @CurrentTenant() tenant: TenantContext,
+    @Query('status') status?: string,
+    @Query('channel') channel?: string,
+    @Query('fulfillment') fulfillment?: string,
+  ) {
+    const orders = await this.kitchen.listOrders(tenant.id, {
       status: status as any,
       channel: channel as any,
       fulfillment: fulfillment as any,
@@ -62,63 +79,64 @@ export class KitchenController {
   }
 
   @Get('orders/:id')
-  async getOrder(@Param('id') id: string) {
-    return this.kitchen.getOrder(id);
+  @UseGuards(KitchenAccessGuard)
+  async getOrder(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.getOrder(tenant.id, id);
   }
 
   @Post('orders/:id/start')
   @UseGuards(KitchenAccessGuard)
-  async start(@Param('id') id: string) {
-    return this.kitchen.updateStatus(id, 'in_prep');
+  async start(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.updateStatus(tenant.id, id, 'in_prep');
   }
 
   @Post('orders/:id/ready')
   @UseGuards(KitchenAccessGuard)
-  async ready(@Param('id') id: string) {
-    return this.kitchen.updateStatus(id, 'ready_waiting_arrival');
+  async ready(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.updateStatus(tenant.id, id, 'ready_waiting_arrival');
   }
 
   @Post('orders/:id/serve')
   @UseGuards(KitchenAccessGuard)
-  async serve(@Param('id') id: string) {
-    return this.kitchen.updateStatus(id, 'served');
+  async serve(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.updateStatus(tenant.id, id, 'served');
   }
 
   @Post('orders/:id/deliver')
   @UseGuards(KitchenAccessGuard)
-  async deliver(@Param('id') id: string) {
-    return this.kitchen.updateStatus(id, 'delivered');
+  async deliver(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.updateStatus(tenant.id, id, 'delivered');
   }
 
   @Post('orders/:id/hold')
   @UseGuards(KitchenAccessGuard)
-  async hold(@Param('id') id: string) {
-    return this.kitchen.updateStatus(id, 'on_hold');
+  async hold(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.updateStatus(tenant.id, id, 'on_hold');
   }
 
   @Post('orders/:id/resume')
   @UseGuards(KitchenAccessGuard)
-  async resume(@Param('id') id: string) {
-    return this.kitchen.updateStatus(id, 'in_prep');
+  async resume(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.updateStatus(tenant.id, id, 'in_prep');
   }
 
   @Post('orders/:id/cancel')
   @UseGuards(KitchenAccessGuard)
-  async cancel(@Param('id') id: string) {
-    return this.kitchen.updateStatus(id, 'canceled');
+  async cancel(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.updateStatus(tenant.id, id, 'canceled');
   }
 
   @Post('orders/:id/arrive')
   @UseGuards(KitchenAccessGuard)
-  async arrive(@Param('id') id: string) {
-    return this.kitchen.updateArrival(id);
+  async arrive(@CurrentTenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.kitchen.updateArrival(tenant.id, id);
   }
 
   @Post('orders/:id/refire')
   @UseGuards(KitchenAccessGuard)
   @ApiBody({ schema: { example: { items: ['item_1'], reason: 'Overcooked' } } })
-  async refire(@Param('id') id: string, @Body() body: { items?: string[]; reason?: string }) {
-    return this.kitchen.refire(id, body?.items, body?.reason);
+  async refire(@CurrentTenant() tenant: TenantContext, @Param('id') id: string, @Body() body: { items?: string[]; reason?: string }) {
+    return this.kitchen.refire(tenant.id, id, body?.items, body?.reason);
   }
 
   @Post('orders/:id/edit')
@@ -133,6 +151,7 @@ export class KitchenController {
     },
   })
   async edit(
+    @CurrentTenant() tenant: TenantContext,
     @Param('id') id: string,
     @Body() body: { items: any[]; priority_flag?: boolean; prep_estimate_minutes?: number | null },
   ) {
@@ -149,7 +168,7 @@ export class KitchenController {
           .filter((i: any) => i.name)
       : [];
 
-    return this.kitchen.editItems(id, items, {
+    return this.kitchen.editItems(tenant.id, id, items, {
       priority_flag: body?.priority_flag,
       prep_estimate_minutes: body?.prep_estimate_minutes ?? null,
     });
@@ -158,13 +177,13 @@ export class KitchenController {
   @Post('manual')
   @UseGuards(KitchenAccessGuard)
   @ApiBody({ schema: { example: { order_id: 'ord_manual_1', items: [{ name: 'Plantains', qty: 2 }] } } })
-  async manual(@Body() body: any) {
-    return this.kitchen.manualCreate(body || {});
+  async manual(@CurrentTenant() tenant: TenantContext, @Body() body: any) {
+    return this.kitchen.manualCreate(tenant.id, body || {});
   }
 
   @Post('demo')
   @UseGuards(KitchenAccessGuard)
-  async demo() {
-    return this.kitchen.demoSeed();
+  async demo(@CurrentTenant() tenant: TenantContext) {
+    return this.kitchen.demoSeed(tenant.id);
   }
 }

@@ -7,6 +7,7 @@ const swagger_1 = require("@nestjs/swagger");
 const nestjs_pino_1 = require("nestjs-pino");
 const app_module_1 = require("./app.module");
 const http_exception_filter_1 = require("./common/filters/http-exception.filter");
+const swagger_docs_1 = require("./common/swagger/swagger-docs");
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule, { bufferLogs: true, rawBody: true, logger: ['error', 'warn', 'log'] });
     app.useLogger(app.get(nestjs_pino_1.Logger));
@@ -24,7 +25,7 @@ async function bootstrap() {
         transform: true,
     }));
     app.useGlobalFilters(new http_exception_filter_1.HttpExceptionFilter());
-    app.setGlobalPrefix('api', { exclude: ['healthz', 'readyz', 'webhooks/stripe', 'webhooks/delivery'] });
+    app.setGlobalPrefix('api', { exclude: ['healthz', 'readyz', 'webhooks/stripe', 'webhooks/stripe-connect', 'webhooks/delivery'] });
     const config = new swagger_1.DocumentBuilder()
         .setTitle('Bite Creole API')
         .setDescription('NestJS rewrite (dev)')
@@ -35,7 +36,7 @@ async function bootstrap() {
         bearerFormat: 'JWT',
     }, 'bearer')
         .build();
-    const document = swagger_1.SwaggerModule.createDocument(app, config);
+    const document = (0, swagger_docs_1.enrichSwaggerDocument)(swagger_1.SwaggerModule.createDocument(app, config));
     swagger_1.SwaggerModule.setup('docs', app, document);
     const port = process.env.PORT ? Number(process.env.PORT) : 3002;
     await app.listen(port);

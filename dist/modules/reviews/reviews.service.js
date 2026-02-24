@@ -73,32 +73,44 @@ let ReviewsService = class ReviewsService {
     hashToken(token) {
         return (0, crypto_1.createHash)('sha256').update(token).digest('hex');
     }
-    async issueReviewAccessToken(email) {
+    async issueReviewAccessToken(tenantId, email) {
         const token = (0, crypto_1.randomUUID)();
         const hashed = this.hashToken(token);
         const expiresAt = new Date(Date.now() + this.reviewTokenTtlMinutes() * 60 * 1000).toISOString();
-        await this.prisma.reviewAccessToken.upsert({
-            where: { email },
-            update: { accessToken: hashed, expiresAt, lastRequestedAt: new Date() },
-            create: { email, accessToken: hashed, expiresAt, lastRequestedAt: new Date() },
-        });
+        const existing = await this.prisma.reviewAccessToken.findUnique({ where: { email } });
+        if (existing && existing.tenantId && existing.tenantId !== tenantId) {
+            throw new common_1.UnauthorizedException('review_access_conflict');
+        }
+        if (existing) {
+            await this.prisma.reviewAccessToken.update({
+                where: { email },
+                data: { tenantId, accessToken: hashed, expiresAt, lastRequestedAt: new Date() },
+            });
+        }
+        else {
+            await this.prisma.reviewAccessToken.create({
+                data: { email, tenantId, accessToken: hashed, expiresAt, lastRequestedAt: new Date() },
+            });
+        }
         return { token, expiresAt };
     }
-    async validateReviewAccessToken(email, token) {
+    async validateReviewAccessToken(tenantId, email, token) {
         if (!token)
             return false;
         const hashed = this.hashToken(token);
         const record = await this.prisma.reviewAccessToken.findUnique({ where: { email } });
         if (!record)
             return false;
+        if (record.tenantId && record.tenantId !== tenantId)
+            return false;
         if (record.accessToken !== hashed)
             return false;
         return new Date(record.expiresAt).getTime() > Date.now();
     }
-    async sendReplyNotification(email, name, reviewId, message) {
+    async sendReplyNotification(tenantId, email, name, reviewId, message) {
         if (!this.mailer)
             return;
-        const access = await this.issueReviewAccessToken(email);
+        const access = await this.issueReviewAccessToken(tenantId, email);
         const link = `${this.customerUrl()}/reviews/conversation?email=${encodeURIComponent(email)}&token=${encodeURIComponent(access.token)}`;
         await this.mailer.sendMail({
             from: this.config.get('GMAIL_USER'),
@@ -107,30 +119,31 @@ let ReviewsService = class ReviewsService {
             html: `<p>Dear ${name},</p><p>We responded to your review:</p><blockquote>${message}</blockquote><p><a href="${link}">View Conversation</a></p>`,
         });
     }
-    async listAdmin() {
-        const rows = await this.prisma.customerReview.findMany({ orderBy: { createdAt: 'desc' } });
+    async listAdmin(tenantId) {
+        const rows = await this.prisma.customerReview.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } });
         return rows.map((r) => this.toReview(r));
     }
-    async listApproved() {
+    async listApproved(tenantId) {
         const rows = await this.prisma.customerReview.findMany({
-            where: { approved: true, visible: true },
+            where: { tenantId, approved: true, visible: true },
             orderBy: { createdAt: 'desc' },
         });
         return rows.map((r) => this.toReview(r));
     }
-    async get(id) {
-        const review = await this.prisma.customerReview.findUnique({ where: { id } });
+    async get(tenantId, id) {
+        const review = await this.prisma.customerReview.findFirst({ where: { id, tenantId } });
         if (!review)
             throw new common_1.NotFoundException('Review not found');
         return this.toReview(review);
     }
-    async create(dto) {
+    async create(tenantId, dto) {
         const id = (0, crypto_1.randomUUID)();
         const createdAt = BigInt(Date.now());
         const date = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
         await this.prisma.customerReview.create({
             data: {
                 id,
+                tenantId,
                 name: dto.name,
                 email: dto.email,
                 rating: dto.rating,
@@ -144,36 +157,41 @@ let ReviewsService = class ReviewsService {
         });
         return { id, ...dto, date, approved: false, visible: false, createdAt: Number(createdAt) };
     }
-    async update(id, dto) {
-        const existing = await this.prisma.customerReview.findUnique({ where: { id } });
+    async update(tenantId, id, dto) {
+        const existing = await this.prisma.customerReview.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Review not found');
-        const updated = await this.prisma.customerReview.update({
-            where: { id },
+        const updatedRows = await this.prisma.customerReview.updateMany({
+            where: { id, tenantId },
             data: {
                 approved: dto.approved ?? existing.approved,
                 visible: dto.visible ?? existing.visible,
                 adminNotes: dto.adminNotes ?? existing.adminNotes,
             },
         });
+        if (!updatedRows.count)
+            throw new common_1.NotFoundException('Review not found');
+        const updated = await this.prisma.customerReview.findFirst({ where: { id, tenantId } });
+        if (!updated)
+            throw new common_1.NotFoundException('Review not found');
         return this.toReview(updated);
     }
-    async remove(id) {
-        await this.prisma.reviewReply.deleteMany({ where: { reviewId: id } });
-        const deleted = await this.prisma.customerReview.delete({ where: { id } });
-        if (!deleted)
+    async remove(tenantId, id) {
+        await this.prisma.reviewReply.deleteMany({ where: { reviewId: id, tenantId } });
+        const deleted = await this.prisma.customerReview.deleteMany({ where: { id, tenantId } });
+        if (!deleted.count)
             throw new common_1.NotFoundException('Review not found');
         return { message: 'Review deleted successfully' };
     }
-    async listReplies(reviewId) {
+    async listReplies(tenantId, reviewId) {
         const rows = await this.prisma.reviewReply.findMany({
-            where: { reviewId },
+            where: { reviewId, tenantId },
             orderBy: { createdAt: 'asc' },
         });
         return rows.map((r) => this.toReply(r));
     }
-    async createReply(reviewId, dto) {
-        const review = await this.prisma.customerReview.findUnique({ where: { id: reviewId } });
+    async createReply(tenantId, reviewId, dto) {
+        const review = await this.prisma.customerReview.findFirst({ where: { id: reviewId, tenantId } });
         if (!review)
             throw new common_1.NotFoundException('Review not found');
         const id = (0, crypto_1.randomUUID)();
@@ -181,6 +199,7 @@ let ReviewsService = class ReviewsService {
         const reply = await this.prisma.reviewReply.create({
             data: {
                 id,
+                tenantId,
                 reviewId,
                 senderType: dto.senderType,
                 senderName: dto.senderName,
@@ -190,16 +209,16 @@ let ReviewsService = class ReviewsService {
             },
         });
         if (dto.senderType === 'admin') {
-            await this.sendReplyNotification(review.email || '', review.name || '', reviewId, dto.message);
+            await this.sendReplyNotification(tenantId, review.email || '', review.name || '', reviewId, dto.message);
         }
         return this.toReply(reply);
     }
-    async createPublicReply(reviewId, dto, authIsAdmin) {
-        const review = await this.prisma.customerReview.findUnique({ where: { id: reviewId } });
+    async createPublicReply(tenantId, reviewId, dto, authIsAdmin) {
+        const review = await this.prisma.customerReview.findFirst({ where: { id: reviewId, tenantId } });
         if (!review)
             throw new common_1.NotFoundException('Review not found');
         if (this.reviewTokenRequired() && !authIsAdmin) {
-            const ok = await this.validateReviewAccessToken(review.email || '', dto.accessToken || '');
+            const ok = await this.validateReviewAccessToken(tenantId, review.email || '', dto.accessToken || '');
             if (!ok)
                 throw new common_1.UnauthorizedException('unauthorized');
         }
@@ -209,6 +228,7 @@ let ReviewsService = class ReviewsService {
         const reply = await this.prisma.reviewReply.create({
             data: {
                 id,
+                tenantId,
                 reviewId,
                 senderType: 'customer',
                 senderName,
@@ -219,27 +239,27 @@ let ReviewsService = class ReviewsService {
         });
         return this.toReply(reply);
     }
-    async deleteReply(reviewId, replyId) {
-        const deleted = await this.prisma.reviewReply.deleteMany({ where: { id: replyId, reviewId } });
+    async deleteReply(tenantId, reviewId, replyId) {
+        const deleted = await this.prisma.reviewReply.deleteMany({ where: { id: replyId, reviewId, tenantId } });
         if (deleted.count === 0)
             throw new common_1.NotFoundException('Reply not found');
         return { message: 'Reply deleted successfully' };
     }
-    async myReviews(dto, authIsAdmin) {
+    async myReviews(tenantId, dto, authIsAdmin) {
         const email = dto.email.toLowerCase().trim();
         if (this.reviewTokenRequired() && !authIsAdmin) {
-            const ok = await this.validateReviewAccessToken(email, dto.accessToken || '');
+            const ok = await this.validateReviewAccessToken(tenantId, email, dto.accessToken || '');
             if (!ok)
                 throw new common_1.UnauthorizedException('unauthorized');
         }
         const reviews = await this.prisma.customerReview.findMany({
-            where: { email },
+            where: { email, tenantId },
             orderBy: { createdAt: 'desc' },
         });
         const reviewIds = reviews.map((review) => review.id);
         const replies = reviewIds.length
             ? await this.prisma.reviewReply.findMany({
-                where: { reviewId: { in: reviewIds } },
+                where: { reviewId: { in: reviewIds }, tenantId },
                 orderBy: [{ reviewId: 'asc' }, { createdAt: 'asc' }],
             })
             : [];
@@ -263,27 +283,27 @@ let ReviewsService = class ReviewsService {
         }
         return results;
     }
-    async markRead(reviewId, dto, authIsAdmin) {
+    async markRead(tenantId, reviewId, dto, authIsAdmin) {
         if (this.reviewTokenRequired() && !authIsAdmin) {
-            const review = await this.prisma.customerReview.findUnique({ where: { id: reviewId } });
+            const review = await this.prisma.customerReview.findFirst({ where: { id: reviewId, tenantId } });
             if (!review)
                 throw new common_1.NotFoundException('Review not found');
-            const ok = await this.validateReviewAccessToken(review.email || '', dto.accessToken || '');
+            const ok = await this.validateReviewAccessToken(tenantId, review.email || '', dto.accessToken || '');
             if (!ok)
                 throw new common_1.UnauthorizedException('unauthorized');
         }
         await this.prisma.reviewReply.updateMany({
-            where: { reviewId, senderType: dto.senderType },
+            where: { reviewId, senderType: dto.senderType, tenantId },
             data: { isRead: true },
         });
         return { message: 'Replies marked as read' };
     }
-    async adminConversations() {
-        const reviews = await this.prisma.customerReview.findMany({ orderBy: { createdAt: 'desc' } });
+    async adminConversations(tenantId) {
+        const reviews = await this.prisma.customerReview.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } });
         const reviewIds = reviews.map((review) => review.id);
         const replies = reviewIds.length
             ? await this.prisma.reviewReply.findMany({
-                where: { reviewId: { in: reviewIds } },
+                where: { reviewId: { in: reviewIds }, tenantId },
                 orderBy: [{ reviewId: 'asc' }, { createdAt: 'asc' }],
             })
             : [];
@@ -318,43 +338,43 @@ let ReviewsService = class ReviewsService {
         });
         return enriched;
     }
-    async adminUnreadCount() {
+    async adminUnreadCount(tenantId) {
         const unreadReplies = await this.prisma.reviewReply.count({
-            where: { senderType: 'customer', isRead: false },
+            where: { senderType: 'customer', isRead: false, tenantId },
         });
-        const pending = await this.prisma.customerReview.count({ where: { approved: false } });
+        const pending = await this.prisma.customerReview.count({ where: { approved: false, tenantId } });
         return { unreadReplies, pendingReviews: pending, total: unreadReplies + pending };
     }
-    async adminMarkRead(reviewId) {
+    async adminMarkRead(tenantId, reviewId) {
         await this.prisma.reviewReply.updateMany({
-            where: { reviewId, senderType: 'customer' },
+            where: { reviewId, senderType: 'customer', tenantId },
             data: { isRead: true },
         });
         return { message: 'Customer replies marked as read' };
     }
-    async adminConversation(reviewId) {
-        const review = await this.prisma.customerReview.findUnique({ where: { id: reviewId } });
+    async adminConversation(tenantId, reviewId) {
+        const review = await this.prisma.customerReview.findFirst({ where: { id: reviewId, tenantId } });
         if (!review)
             throw new common_1.NotFoundException('Review not found');
         const replies = await this.prisma.reviewReply.findMany({
-            where: { reviewId },
+            where: { reviewId, tenantId },
             orderBy: { createdAt: 'asc' },
         });
         await this.prisma.reviewReply.updateMany({
-            where: { reviewId, senderType: 'customer' },
+            where: { reviewId, senderType: 'customer', tenantId },
             data: { isRead: true },
         });
         return { ...this.toReview(review), replies: replies.map((r) => this.toReply(r)) };
     }
-    async publicWithReplies() {
+    async publicWithReplies(tenantId) {
         const reviews = await this.prisma.customerReview.findMany({
-            where: { approved: true, visible: true },
+            where: { tenantId, approved: true, visible: true },
             orderBy: { createdAt: 'desc' },
         });
         const reviewIds = reviews.map((review) => review.id);
         const adminReplies = reviewIds.length
             ? await this.prisma.reviewReply.findMany({
-                where: { reviewId: { in: reviewIds }, senderType: 'admin' },
+                where: { reviewId: { in: reviewIds }, senderType: 'admin', tenantId },
                 orderBy: [{ reviewId: 'asc' }, { createdAt: 'asc' }],
             })
             : [];
@@ -376,9 +396,9 @@ let ReviewsService = class ReviewsService {
         }
         return payload;
     }
-    async requestAccess(dto) {
+    async requestAccess(tenantId, dto) {
         const email = dto.email.toLowerCase().trim();
-        const access = await this.issueReviewAccessToken(email);
+        const access = await this.issueReviewAccessToken(tenantId, email);
         const link = `${this.customerUrl()}/reviews/conversation?email=${encodeURIComponent(email)}&token=${encodeURIComponent(access.token)}`;
         if (this.mailer) {
             await this.mailer.sendMail({

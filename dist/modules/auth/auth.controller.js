@@ -17,31 +17,32 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const auth_service_1 = require("./auth.service");
 const login_dto_1 = require("./dto/login.dto");
-const create_staff_dto_1 = require("./dto/create-staff.dto");
 const auth_guard_1 = require("./auth.guard");
 let AuthController = class AuthController {
     constructor(auth) {
         this.auth = auth;
     }
     async adminLogin(body) {
-        const user = await this.auth.loginWithRole('admin', body.username, body.password);
-        const token = this.auth.signToken({ username: user.username, role: 'admin' });
-        return { success: true, username: user.username, role: 'admin', token, message: 'Login successful' };
+        const user = await this.auth.loginWithRole('admin', body.username, body.password, body.tenantId);
+        const token = this.auth.signToken({
+            sub: user.id,
+            username: user.username,
+            role: 'admin',
+            tenantId: user.tenantId,
+            locationIds: user.locationIds,
+        });
+        return { success: true, username: user.username, role: 'admin', tenantId: user.tenantId, token, message: 'Login successful' };
     }
     async kitchenLogin(body) {
-        const user = await this.auth.loginWithRole('kitchen', body.username, body.password);
-        const token = this.auth.signToken({ username: user.username, role: 'kitchen' });
-        return { success: true, username: user.username, role: 'kitchen', token, message: 'Login successful' };
-    }
-    // Public admin credential creation (dev only). Do not use in production.
-    async seedAdmin(body) {
-        const user = await this.auth.createAdminUser(body.username, body.password);
-        return { success: true, username: user.username, role: user.role };
-    }
-    // Public kitchen credential creation (dev only). Do not use in production.
-    async seedKitchen(body) {
-        const user = await this.auth.createKitchenUser(body.username, body.password);
-        return { success: true, username: user.username, role: user.role };
+        const user = await this.auth.loginWithRole('kitchen', body.username, body.password, body.tenantId);
+        const token = this.auth.signToken({
+            sub: user.id,
+            username: user.username,
+            role: 'kitchen',
+            tenantId: user.tenantId,
+            locationIds: user.locationIds,
+        });
+        return { success: true, username: user.username, role: 'kitchen', tenantId: user.tenantId, token, message: 'Login successful' };
     }
     adminVerify(res) {
         res.json({ valid: true });
@@ -68,20 +69,6 @@ __decorate([
     __metadata("design:paramtypes", [login_dto_1.LoginDto]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "kitchenLogin", null);
-__decorate([
-    (0, common_1.Post)('admin/seed'),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_staff_dto_1.CreateStaffDto]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "seedAdmin", null);
-__decorate([
-    (0, common_1.Post)('kitchen/seed'),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_staff_dto_1.CreateStaffDto]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "seedKitchen", null);
 __decorate([
     (0, common_1.Get)('admin/verify'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),

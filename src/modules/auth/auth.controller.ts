@@ -3,7 +3,6 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
-import { CreateStaffDto } from './dto/create-staff.dto';
 import { AuthGuard, AdminGuard, KitchenGuard } from './auth.guard';
 
 @ApiTags('auth')
@@ -13,30 +12,28 @@ export class AuthController {
 
   @Post('admin/login')
   async adminLogin(@Body() body: LoginDto) {
-    const user = await this.auth.loginWithRole('admin', body.username, body.password);
-    const token = this.auth.signToken({ username: user.username, role: 'admin' });
-    return { success: true, username: user.username, role: 'admin', token, message: 'Login successful' };
+    const user = await this.auth.loginWithRole('admin', body.username, body.password, body.tenantId);
+    const token = this.auth.signToken({
+      sub: user.id,
+      username: user.username,
+      role: 'admin',
+      tenantId: user.tenantId,
+      locationIds: user.locationIds,
+    });
+    return { success: true, username: user.username, role: 'admin', tenantId: user.tenantId, token, message: 'Login successful' };
   }
 
   @Post('kitchen/login')
   async kitchenLogin(@Body() body: LoginDto) {
-    const user = await this.auth.loginWithRole('kitchen', body.username, body.password);
-    const token = this.auth.signToken({ username: user.username, role: 'kitchen' });
-    return { success: true, username: user.username, role: 'kitchen', token, message: 'Login successful' };
-  }
-
-  // Public admin credential creation (dev only). Do not use in production.
-  @Post('admin/seed')
-  async seedAdmin(@Body() body: CreateStaffDto) {
-    const user = await this.auth.createAdminUser(body.username, body.password);
-    return { success: true, username: user.username, role: user.role };
-  }
-
-  // Public kitchen credential creation (dev only). Do not use in production.
-  @Post('kitchen/seed')
-  async seedKitchen(@Body() body: CreateStaffDto) {
-    const user = await this.auth.createKitchenUser(body.username, body.password);
-    return { success: true, username: user.username, role: user.role };
+    const user = await this.auth.loginWithRole('kitchen', body.username, body.password, body.tenantId);
+    const token = this.auth.signToken({
+      sub: user.id,
+      username: user.username,
+      role: 'kitchen',
+      tenantId: user.tenantId,
+      locationIds: user.locationIds,
+    });
+    return { success: true, username: user.username, role: 'kitchen', tenantId: user.tenantId, token, message: 'Login successful' };
   }
 
   @Get('admin/verify')

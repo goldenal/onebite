@@ -27,16 +27,37 @@ const client_1 = require("@prisma/client");
 const crypto_1 = require("crypto");
 const delivery_service_1 = require("../delivery/delivery.service");
 const error_response_1 = require("../../common/errors/error-response");
+const platform_service_1 = require("../platform/platform.service");
 let WebhooksController = WebhooksController_1 = class WebhooksController {
-    constructor(config, kitchen, prisma, delivery) {
+    constructor(config, kitchen, prisma, delivery, platform) {
         this.config = config;
         this.kitchen = kitchen;
         this.prisma = prisma;
         this.delivery = delivery;
+        this.platform = platform;
         this.logger = new common_1.Logger(WebhooksController_1.name);
         this.stripe = new stripe_1.default(this.config.get('STRIPE_SECRET_KEY') || '', {
             apiVersion: '2023-10-16',
         });
+    }
+    async markProcessed(provider, eventId, tenantId) {
+        try {
+            await this.prisma.processedWebhookEvent.create({
+                data: {
+                    id: `pwe_${(0, crypto_1.randomUUID)()}`,
+                    provider,
+                    eventId,
+                    tenantId: tenantId || null,
+                },
+            });
+            return true;
+        }
+        catch (error) {
+            if (error instanceof client_1.Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+                return false;
+            }
+            throw error;
+        }
     }
     async stripeWebhook(req, res, sig) {
         const webhookSecret = this.config.get('STRIPE_WEBHOOK_SECRET');
@@ -70,13 +91,21 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
             const metadata = pi.metadata || {};
             const now = new Date().toISOString();
             const id = this.kitchen.normalizeOrderId(metadata.order_id || metadata.cart_id || pi.id);
-            const payment = await this.prisma.paymentLink.findUnique({ where: { orderId: id } });
-            const channel = (payment?.channel || metadata.channel || 'web');
-            const fulfillment = (payment?.fulfillment || metadata.fulfillment || 'pickup');
+            const payment = await this.prisma.paymentLink.findFirst({ where: { orderId: id } });
+            if (!payment)
+                return res.json({ received: true, ignored: 'payment_not_found' });
+            const tenantId = payment.tenantId;
+            const channel = (payment.channel || metadata.channel || 'web');
+            const fulfillment = (payment.fulfillment || metadata.fulfillment || 'pickup');
+            const firstLocation = await this.prisma.location.findFirst({ where: { tenantId }, orderBy: { createdAt: 'asc' } });
             const pickupCode = fulfillment === 'pickup' && (channel === 'web' || channel === 'phone' || channel === 'ai')
                 ? this.kitchen.generatePickupCode()
                 : undefined;
-            const rawItems = payment && Array.isArray(payment.items) ? payment.items : metadata.items ? this.safeJson(metadata.items, []) : [];
+            const rawItems = payment && Array.isArray(payment.items)
+                ? payment.items
+                : metadata.items
+                    ? this.safeJson(metadata.items, [])
+                    : [];
             const items = this.normalizeOrderItems(rawItems);
             const order = {
                 id,
@@ -90,11 +119,7 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
                             ? `AI ${fulfillment === 'pickup' ? 'Pickup' : 'Delivery'}`
                             : 'In-Store Tablet',
                 status: 'queued',
-                arrival_status: fulfillment === 'pickup'
-                    ? channel === 'tablet'
-                        ? 'not_required'
-                        : 'waiting'
-                    : 'not_required',
+                arrival_status: fulfillment === 'pickup' ? (channel === 'tablet' ? 'not_required' : 'waiting') : 'not_required',
                 pickup_code: pickupCode,
                 paid_at: now,
                 created_at: now,
@@ -106,33 +131,57 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
                         : { ts: now, actor: 'system', action: 'order_created' },
                 ],
             };
-            let createdEvent = false;
+            const createdEvent = await this.markProcessed('stripe', event.id, tenantId);
+            if (!createdEvent)
+                return res.json({ received: true, duplicate: true });
             await this.prisma.$transaction(async (tx) => {
-                await tx.paymentLink.updateMany({ where: { orderId: id }, data: { state: 'PAID', updatedAt: new Date() } });
-                let created = false;
-                try {
-                    await tx.processedEvent.create({ data: { eventId: event.id, source: 'stripe' } });
-                    created = true;
-                }
-                catch (err) {
-                    if (err instanceof client_1.Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-                        created = false;
-                    }
-                    else {
-                        throw err;
-                    }
-                }
-                if (!created)
-                    return;
-                createdEvent = true;
-                await this.kitchen.upsertOrderWithItemsTx(tx, order);
+                await tx.paymentLink.updateMany({
+                    where: { orderId: id, tenantId },
+                    data: {
+                        state: 'PAID',
+                        updatedAt: new Date(),
+                    },
+                });
+                await this.kitchen.upsertOrderWithItemsTx(tx, tenantId, {
+                    ...order,
+                    location_id: firstLocation?.id ?? null,
+                });
             });
-            if (createdEvent) {
-                void this.kitchen.broadcastOrdersSnapshot();
+            void this.kitchen.broadcastOrdersSnapshot(tenantId);
+            if (fulfillment === 'delivery') {
+                this.enqueueDeliveryCreation(tenantId, id);
             }
-            if (createdEvent && fulfillment === 'delivery') {
-                //   this.enqueueDeliveryCreation(id);
+        }
+        return res.json({ received: true });
+    }
+    async stripeConnectWebhook(req, res, sig) {
+        const webhookSecret = this.config.get('STRIPE_CONNECT_WEBHOOK_SECRET') || this.config.get('STRIPE_WEBHOOK_SECRET');
+        if (!webhookSecret) {
+            return res
+                .status(common_1.HttpStatus.INTERNAL_SERVER_ERROR)
+                .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.INTERNAL_SERVER_ERROR, code: 'server_not_configured', path: req.url }));
+        }
+        let event;
+        try {
+            const rawBody = req.rawBody;
+            if (!rawBody) {
+                return res
+                    .status(common_1.HttpStatus.BAD_REQUEST)
+                    .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'invalid_signature', path: req.url }));
             }
+            event = this.stripe.webhooks.constructEvent(rawBody, sig || '', webhookSecret);
+        }
+        catch {
+            return res
+                .status(common_1.HttpStatus.BAD_REQUEST)
+                .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'invalid_signature', path: req.url }));
+        }
+        const createdEvent = await this.markProcessed('stripe_connect', event.id, null);
+        if (!createdEvent)
+            return res.json({ received: true, duplicate: true });
+        if (event.type === 'account.updated') {
+            const account = event.data.object;
+            await this.platform.handleConnectWebhook(account.id);
         }
         return res.json({ received: true });
     }
@@ -170,11 +219,17 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
             let orderId = data.external_id || data.order_id || payload.order_id || payload.order_ref;
             const status = data.status || payload.status;
             const eta = data.dropoff_eta || data.eta || null;
+            let tenantId;
             if (!orderId && deliveryId) {
                 const row = await this.prisma.deliveryRequest.findFirst({ where: { deliveryId } });
                 orderId = row?.orderId;
+                tenantId = row?.tenantId;
             }
-            if (!orderId || !status) {
+            if (orderId && !tenantId) {
+                const payment = await this.prisma.paymentLink.findFirst({ where: { orderId } });
+                tenantId = payment?.tenantId;
+            }
+            if (!orderId || !status || !tenantId) {
                 return res
                     .status(common_1.HttpStatus.BAD_REQUEST)
                     .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'bad_request', path: req.url }));
@@ -182,6 +237,7 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
             await this.prisma.deliveryRequest.upsert({
                 where: { orderId },
                 update: {
+                    tenantId,
                     provider: 'uber_direct',
                     deliveryId: deliveryId || null,
                     status,
@@ -190,15 +246,16 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
                 },
                 create: {
                     orderId,
+                    tenantId,
                     provider: 'uber_direct',
                     deliveryId: deliveryId || null,
                     status,
                     eta,
                 },
-            }); //
+            });
             const event = this.mapUberStatusToEvent(status);
             if (event) {
-                await this.kitchen.updateDelivery(orderId, event, {
+                await this.kitchen.updateDelivery(tenantId, orderId, event, {
                     status,
                     eta,
                     courier: data.courier || null,
@@ -218,7 +275,13 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
                 .status(common_1.HttpStatus.BAD_REQUEST)
                 .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'bad_request', path: req.url }));
         }
-        await this.kitchen.updateDelivery(payload.order_ref, payload.event, payload.driver_status);
+        const payment = await this.prisma.paymentLink.findFirst({ where: { orderId: payload.order_ref } });
+        if (!payment?.tenantId) {
+            return res
+                .status(common_1.HttpStatus.BAD_REQUEST)
+                .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.BAD_REQUEST, code: 'bad_request', path: req.url }));
+        }
+        await this.kitchen.updateDelivery(payment.tenantId, payload.order_ref, payload.event, payload.driver_status);
         return res.json({ ok: true });
     }
     mapUberStatusToEvent(status) {
@@ -259,9 +322,9 @@ let WebhooksController = WebhooksController_1 = class WebhooksController {
         })
             .filter(Boolean);
     }
-    enqueueDeliveryCreation(orderId) {
+    enqueueDeliveryCreation(tenantId, orderId) {
         setImmediate(() => {
-            void this.delivery.createDeliveryAfterPayment(orderId).catch((error) => {
+            void this.delivery.createDeliveryAfterPayment(tenantId, orderId).catch((error) => {
                 this.logger.error(`Failed async delivery creation for orderId=${orderId}`, error?.stack || String(error));
             });
         });
@@ -278,6 +341,15 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], WebhooksController.prototype, "stripeWebhook", null);
 __decorate([
+    (0, common_1.Post)('stripe-connect'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)()),
+    __param(2, (0, common_1.Headers)('stripe-signature')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object, String]),
+    __metadata("design:returntype", Promise)
+], WebhooksController.prototype, "stripeConnectWebhook", null);
+__decorate([
     (0, common_1.Post)('delivery'),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Res)()),
@@ -291,5 +363,6 @@ exports.WebhooksController = WebhooksController = WebhooksController_1 = __decor
     __metadata("design:paramtypes", [config_1.ConfigService,
         kitchen_service_1.KitchenService,
         prisma_service_1.PrismaService,
-        delivery_service_1.DeliveryService])
+        delivery_service_1.DeliveryService,
+        platform_service_1.PlatformService])
 ], WebhooksController);

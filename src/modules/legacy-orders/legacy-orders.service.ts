@@ -13,8 +13,8 @@ export class LegacyOrdersService {
     return this.config.get<string>('ALLOW_LEGACY_ORDERS') === 'true';
   }
 
-  async list() {
-    const rows = await this.prisma.legacyOrder.findMany({ orderBy: { timestamp: 'desc' } });
+  async list(tenantId: string) {
+    const rows = await this.prisma.legacyOrder.findMany({ where: { tenantId }, orderBy: { timestamp: 'desc' } });
     return rows.map((o) => ({
       id: o.id,
       items: o.items ?? [],
@@ -27,8 +27,8 @@ export class LegacyOrdersService {
     }));
   }
 
-  async get(id: string) {
-    const order = await this.prisma.legacyOrder.findUnique({ where: { id } });
+  async get(tenantId: string, id: string) {
+    const order = await this.prisma.legacyOrder.findFirst({ where: { id, tenantId } });
     if (!order) throw new NotFoundException('Order not found');
     return {
       id: order.id,
@@ -42,7 +42,7 @@ export class LegacyOrdersService {
     };
   }
 
-  async create(dto: CreateLegacyOrderDto) {
+  async create(tenantId: string, dto: CreateLegacyOrderDto) {
     if (!this.allowLegacyOrders()) {
       throw new ForbiddenException('Legacy order creation disabled. Use Stripe payment flow.');
     }
@@ -52,6 +52,7 @@ export class LegacyOrdersService {
     await this.prisma.legacyOrder.create({
       data: {
         id,
+        tenantId,
         items: dto.items ?? [],
         total: dto.total,
         status: 'pending',
@@ -73,18 +74,21 @@ export class LegacyOrdersService {
     };
   }
 
-  async update(id: string, dto: UpdateLegacyOrderDto) {
-    const existing = await this.prisma.legacyOrder.findUnique({ where: { id } });
+  async update(tenantId: string, id: string, dto: UpdateLegacyOrderDto) {
+    const existing = await this.prisma.legacyOrder.findFirst({ where: { id, tenantId } });
     if (!existing) throw new NotFoundException('Order not found');
 
-    const updated = await this.prisma.legacyOrder.update({
-      where: { id },
+    const updatedRows = await this.prisma.legacyOrder.updateMany({
+      where: { id, tenantId },
       data: {
         status: dto.status ?? existing.status,
         customerName: dto.customerName ?? existing.customerName,
         customerPhone: dto.customerPhone ?? existing.customerPhone,
       },
     });
+    if (!updatedRows.count) throw new NotFoundException('Order not found');
+    const updated = await this.prisma.legacyOrder.findFirst({ where: { id, tenantId } });
+    if (!updated) throw new NotFoundException('Order not found');
 
     return {
       id: updated.id,
@@ -98,10 +102,10 @@ export class LegacyOrdersService {
     };
   }
 
-  async remove(id: string) {
-    const existing = await this.prisma.legacyOrder.findUnique({ where: { id } });
+  async remove(tenantId: string, id: string) {
+    const existing = await this.prisma.legacyOrder.findFirst({ where: { id, tenantId } });
     if (!existing) throw new NotFoundException('Order not found');
-    await this.prisma.legacyOrder.delete({ where: { id } });
+    await this.prisma.legacyOrder.deleteMany({ where: { id, tenantId } });
     return { message: 'Order deleted successfully' };
   }
 }

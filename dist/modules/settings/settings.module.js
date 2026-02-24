@@ -10,12 +10,14 @@ exports.SettingsModule = void 0;
 const common_1 = require("@nestjs/common");
 const settings_controller_1 = require("./settings.controller");
 const settings_service_1 = require("./settings.service");
+const content_controller_1 = require("./content.controller");
 let SettingsModule = class SettingsModule {
 };
 exports.SettingsModule = SettingsModule;
 exports.SettingsModule = SettingsModule = __decorate([
     (0, common_1.Module)({
-        controllers: [settings_controller_1.SettingsController],
+        controllers: [settings_controller_1.SettingsController, content_controller_1.ContentController],
         providers: [settings_service_1.SettingsService],
+        exports: [settings_service_1.SettingsService],
     })
 ], SettingsModule);

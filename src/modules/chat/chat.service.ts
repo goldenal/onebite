@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TabletService } from '../tablet/tablet.service';
 
@@ -10,12 +9,11 @@ export class ChatService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tablet: TabletService,
-    private readonly config: ConfigService,
   ) {}
 
-  async handleChat(body: { message: string; sessionId?: string; tabletId?: string }) {
+  async handleChat(tenantId: string, body: { message: string; sessionId?: string; tabletId?: string }) {
     const tabletId = (body.tabletId || 'default-tablet').trim();
-    const sessionResult = await this.tablet.touchSession({ tabletId, incrementQuestions: true });
+    const sessionResult = await this.tablet.touchSession({ tenantId, tabletId, incrementQuestions: true });
 
     const sessionPayload = {
       sessionId: sessionResult.session.sessionId,
@@ -50,6 +48,7 @@ export class ChatService {
     const assistantMessage = `This is a placeholder response. You said: "${body.message}"`;
 
     await this.tablet.touchSession({
+      tenantId,
       tabletId,
       appendMessages: [
         { role: 'user', content: body.message },
@@ -65,11 +64,12 @@ export class ChatService {
     };
   }
 
-  async reset(tabletId?: string) {
+  async reset(tenantId: string, tabletId?: string) {
     const id = (tabletId || 'default-tablet').trim();
+    const scopedTabletId = `${tenantId}::${id}`;
     try {
       await this.prisma.tabletSession.update({
-        where: { tabletId: id },
+        where: { tabletId: scopedTabletId },
         data: { conversationHistory: [], questionCount: 0, warningSent: false, agentConversationId: null },
       });
     } catch (error: any) {

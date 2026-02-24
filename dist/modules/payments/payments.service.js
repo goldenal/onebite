@@ -29,6 +29,12 @@ let PaymentsService = class PaymentsService {
     makeWebhookTimeoutMs() {
         return Number(this.config.get('MAKE_WEBHOOK_TIMEOUT_MS') || 5000);
     }
+    platformFeeBps() {
+        return Number(this.config.get('PLATFORM_FEE_BPS') || 500);
+    }
+    checkoutTaxBps() {
+        return Number(this.config.get('CHECKOUT_TAX_BPS') || 0);
+    }
     async fetchWithTimeout(url, init, timeoutMs) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
@@ -65,7 +71,7 @@ let PaymentsService = class PaymentsService {
     normalizeRawItems(value) {
         return Array.isArray(value) ? value : [];
     }
-    async resolveMenuPricedItems(items) {
+    async resolveMenuPricedItems(tenantId, items) {
         if (!items.length)
             return [];
         const parsed = items.map((raw, index) => {
@@ -79,7 +85,10 @@ let PaymentsService = class PaymentsService {
             return { raw, menuItemId: id, quantity };
         });
         const menuItems = await this.prisma.menuItem.findMany({
-            where: { id: { in: Array.from(new Set(parsed.map((item) => item.menuItemId))) } },
+            where: {
+                tenantId,
+                id: { in: Array.from(new Set(parsed.map((item) => item.menuItemId))) },
+            },
             select: { id: true, name: true, price: true },
         });
         const byId = new Map(menuItems.map((row) => [row.id, row]));
@@ -132,21 +141,175 @@ let PaymentsService = class PaymentsService {
             quantity: item.quantity,
         }));
     }
-    async createCart(dto) {
+    async paymentSummary(tenantId, filters) {
+        const createdAt = filters?.from || filters?.to
+            ? {
+                gte: filters?.from,
+                lte: filters?.to,
+            }
+            : undefined;
+        const rows = await this.prisma.paymentLink.findMany({
+            where: { tenantId, createdAt },
+            select: {
+                orderId: true,
+                state: true,
+                amount: true,
+                subtotalCents: true,
+                taxCents: true,
+                deliveryFeeCents: true,
+                applicationFeeCents: true,
+                connectedAccountId: true,
+                createdAt: true,
+            },
+        });
+        const totals = rows.reduce((acc, row) => {
+            const amountCents = Math.round(Number(row.amount || 0) * 100);
+            acc.grossCents += amountCents;
+            acc.subtotalCents += Math.max(0, row.subtotalCents || 0);
+            acc.taxCents += Math.max(0, row.taxCents || 0);
+            acc.deliveryFeeCents += Math.max(0, row.deliveryFeeCents || 0);
+            acc.applicationFeeCents += Math.max(0, row.applicationFeeCents || 0);
+            const state = (row.state || '').toUpperCase();
+            if (state === 'PAID')
+                acc.paidCount += 1;
+            if (state === 'AWAITING_PAYMENT')
+                acc.awaitingCount += 1;
+            if (state === 'FAILED')
+                acc.failedCount += 1;
+            if (row.connectedAccountId)
+                acc.connectedAccountOrders += 1;
+            return acc;
+        }, {
+            grossCents: 0,
+            subtotalCents: 0,
+            taxCents: 0,
+            deliveryFeeCents: 0,
+            applicationFeeCents: 0,
+            paidCount: 0,
+            awaitingCount: 0,
+            failedCount: 0,
+            connectedAccountOrders: 0,
+        });
+        const stripeAccount = await this.prisma.tenantStripeAccount.findUnique({
+            where: { tenantId },
+            select: {
+                connectAccountId: true,
+                onboardingComplete: true,
+                chargesEnabled: true,
+                payoutsEnabled: true,
+            },
+        });
+        return {
+            tenantId,
+            period: {
+                from: filters?.from?.toISOString() || null,
+                to: filters?.to?.toISOString() || null,
+            },
+            counts: {
+                total: rows.length,
+                paid: totals.paidCount,
+                awaitingPayment: totals.awaitingCount,
+                failed: totals.failedCount,
+            },
+            amounts: {
+                grossCents: totals.grossCents,
+                subtotalCents: totals.subtotalCents,
+                taxCents: totals.taxCents,
+                deliveryFeeCents: totals.deliveryFeeCents,
+                applicationFeeCents: totals.applicationFeeCents,
+                estimatedNetToRestaurantCents: totals.grossCents - totals.applicationFeeCents,
+            },
+            stripeConnect: {
+                configured: Boolean(stripeAccount?.connectAccountId),
+                onboardingComplete: Boolean(stripeAccount?.onboardingComplete),
+                chargesEnabled: Boolean(stripeAccount?.chargesEnabled),
+                payoutsEnabled: Boolean(stripeAccount?.payoutsEnabled),
+            },
+        };
+    }
+    async paymentTransactions(tenantId, filters) {
+        const page = Math.max(1, Number(filters?.page || 1));
+        const limit = Math.min(100, Math.max(1, Number(filters?.limit || 20)));
+        const createdAt = filters?.from || filters?.to
+            ? {
+                gte: filters?.from,
+                lte: filters?.to,
+            }
+            : undefined;
+        const state = filters?.state ? filters.state : undefined;
+        const [total, rows] = await this.prisma.$transaction([
+            this.prisma.paymentLink.count({ where: { tenantId, createdAt, state } }),
+            this.prisma.paymentLink.findMany({
+                where: { tenantId, createdAt, state },
+                orderBy: { createdAt: 'desc' },
+                skip: (page - 1) * limit,
+                take: limit,
+                select: {
+                    orderId: true,
+                    state: true,
+                    amount: true,
+                    subtotalCents: true,
+                    taxCents: true,
+                    deliveryFeeCents: true,
+                    applicationFeeCents: true,
+                    connectedAccountId: true,
+                    paymentLink: true,
+                    fulfillment: true,
+                    channel: true,
+                    customerName: true,
+                    createdAt: true,
+                    updatedAt: true,
+                },
+            }),
+        ]);
+        return {
+            tenantId,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.max(1, Math.ceil(total / limit)),
+            },
+            items: rows.map((row) => ({
+                orderId: row.orderId,
+                state: row.state,
+                amountCents: Math.round(Number(row.amount || 0) * 100),
+                subtotalCents: row.subtotalCents || 0,
+                taxCents: row.taxCents || 0,
+                deliveryFeeCents: row.deliveryFeeCents || 0,
+                applicationFeeCents: row.applicationFeeCents || 0,
+                estimatedNetToRestaurantCents: Math.round(Number(row.amount || 0) * 100) - (row.applicationFeeCents || 0),
+                connectedAccountId: row.connectedAccountId,
+                paymentLink: row.paymentLink,
+                fulfillment: row.fulfillment,
+                channel: row.channel,
+                customerName: row.customerName,
+                createdAt: row.createdAt?.toISOString() || null,
+                updatedAt: row.updatedAt?.toISOString() || null,
+            })),
+        };
+    }
+    async createCart(tenantId, dto) {
         const order_id = `ord_${(0, crypto_1.randomUUID)()}`;
         const rawItems = this.normalizeRawItems(dto.items);
-        const resolvedItems = await this.resolveMenuPricedItems(rawItems);
+        const resolvedItems = await this.resolveMenuPricedItems(tenantId, rawItems);
         if (!resolvedItems.length)
             throw new common_1.BadRequestException('items_required');
-        const itemsTotalCents = this.totalFromResolvedItems(resolvedItems);
-        const amount = itemsTotalCents / 100;
+        const subtotalCents = this.totalFromResolvedItems(resolvedItems);
+        const amount = subtotalCents / 100;
         if (!Number.isFinite(amount) || amount <= 0)
             throw new common_1.BadRequestException('amount_required');
         const items = resolvedItems.length ? this.toPersistedItems(resolvedItems) : rawItems;
         await this.prisma.paymentLink.upsert({
             where: { orderId: order_id },
             update: {
+                tenantId,
                 amount,
+                subtotalCents,
+                taxCents: 0,
+                deliveryFeeCents: 0,
+                applicationFeeCents: 0,
+                connectedAccountId: null,
                 fulfillment: dto.fulfillment,
                 channel: dto.channel || 'web',
                 items,
@@ -157,8 +320,14 @@ let PaymentsService = class PaymentsService {
             },
             create: {
                 orderId: order_id,
+                tenantId,
                 userId: dto.user_id ?? null,
                 amount,
+                subtotalCents,
+                taxCents: 0,
+                deliveryFeeCents: 0,
+                applicationFeeCents: 0,
+                connectedAccountId: null,
                 state: 'AWAITING_PAYMENT',
                 fulfillment: dto.fulfillment,
                 channel: dto.channel || 'web',
@@ -169,54 +338,68 @@ let PaymentsService = class PaymentsService {
         });
         return { order_id, amount, state: 'AWAITING_PAYMENT' };
     }
-    async createPaymentLink(dto) {
-        const existing = await this.prisma.paymentLink.findUnique({ where: { orderId: dto.order_id } });
+    async createPaymentLink(tenantId, dto) {
+        const existing = await this.prisma.paymentLink.findFirst({ where: { orderId: dto.order_id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('order_not_found');
         const rawItems = this.normalizeRawItems(existing.items);
-        const resolvedItems = await this.resolveMenuPricedItems(rawItems);
+        const resolvedItems = await this.resolveMenuPricedItems(tenantId, rawItems);
         if (!resolvedItems.length)
             throw new common_1.BadRequestException('items_required');
-        const itemsTotalCents = this.totalFromResolvedItems(resolvedItems);
-        const amount = itemsTotalCents / 100;
+        const subtotalCents = this.totalFromResolvedItems(resolvedItems);
+        const amount = subtotalCents / 100;
         if (!Number.isFinite(amount) || amount <= 0)
             throw new common_1.BadRequestException('amount_required');
         const items = resolvedItems.length ? this.toPersistedItems(resolvedItems) : rawItems;
         let payment_link = `https://pay.example/${dto.order_id}`;
         const makePaymentLink = await this.requestMakePaymentLink({
             user_id: dto.user_id,
+            tenant_id: tenantId,
             order_id: dto.order_id,
             amount,
         });
         if (makePaymentLink)
             payment_link = makePaymentLink;
-        await this.prisma.paymentLink.update({
-            where: { orderId: dto.order_id },
-            data: { amount, items, state: 'AWAITING_PAYMENT', paymentLink: payment_link, updatedAt: new Date() },
+        await this.prisma.paymentLink.updateMany({
+            where: { orderId: dto.order_id, tenantId },
+            data: {
+                amount,
+                subtotalCents,
+                items,
+                state: 'AWAITING_PAYMENT',
+                paymentLink: payment_link,
+                updatedAt: new Date(),
+            },
         });
         return { payment_link, amount, state: 'AWAITING_PAYMENT' };
     }
-    async getPayment(orderId) {
-        const row = await this.prisma.paymentLink.findUnique({ where: { orderId } });
+    async getPayment(tenantId, orderId) {
+        const row = await this.prisma.paymentLink.findFirst({ where: { orderId, tenantId } });
         if (!row)
             throw new common_1.NotFoundException('order_not_found');
         return row;
     }
-    async phonePaymentLink(dto) {
+    async phonePaymentLink(tenantId, dto) {
         const order_id = `ord_${(0, crypto_1.randomUUID)()}`;
         const rawItems = this.normalizeRawItems(dto.items);
-        const resolvedItems = await this.resolveMenuPricedItems(rawItems);
+        const resolvedItems = await this.resolveMenuPricedItems(tenantId, rawItems);
         if (!resolvedItems.length)
             throw new common_1.BadRequestException('items_required');
-        const itemsTotalCents = this.totalFromResolvedItems(resolvedItems);
-        const amount = itemsTotalCents / 100;
+        const subtotalCents = this.totalFromResolvedItems(resolvedItems);
+        const amount = subtotalCents / 100;
         if (!Number.isFinite(amount) || amount <= 0)
             throw new common_1.BadRequestException('amount_required');
         const items = resolvedItems.length ? this.toPersistedItems(resolvedItems) : rawItems;
         await this.prisma.paymentLink.upsert({
             where: { orderId: order_id },
             update: {
+                tenantId,
                 amount,
+                subtotalCents,
+                taxCents: 0,
+                deliveryFeeCents: 0,
+                applicationFeeCents: 0,
+                connectedAccountId: null,
                 fulfillment: dto.fulfillment || 'pickup',
                 channel: 'phone',
                 items,
@@ -227,7 +410,13 @@ let PaymentsService = class PaymentsService {
             },
             create: {
                 orderId: order_id,
+                tenantId,
                 amount,
+                subtotalCents,
+                taxCents: 0,
+                deliveryFeeCents: 0,
+                applicationFeeCents: 0,
+                connectedAccountId: null,
                 state: 'AWAITING_PAYMENT',
                 fulfillment: dto.fulfillment || 'pickup',
                 channel: 'phone',
@@ -237,30 +426,45 @@ let PaymentsService = class PaymentsService {
             },
         });
         let payment_link = `https://pay.example/${order_id}`;
-        const makePaymentLink = await this.requestMakePaymentLink({ order_id, amount });
+        const makePaymentLink = await this.requestMakePaymentLink({ tenant_id: tenantId, order_id, amount });
         if (makePaymentLink)
             payment_link = makePaymentLink;
-        await this.prisma.paymentLink.update({
-            where: { orderId: order_id },
+        await this.prisma.paymentLink.updateMany({
+            where: { orderId: order_id, tenantId },
             data: { paymentLink: payment_link, updatedAt: new Date() },
         });
         return { order_id, payment_link, amount, state: 'AWAITING_PAYMENT' };
     }
-    async createCheckoutSession(dto) {
-        const payment = await this.prisma.paymentLink.findUnique({ where: { orderId: dto.order_id } });
+    async createCheckoutSession(tenantId, dto) {
+        const payment = await this.prisma.paymentLink.findFirst({ where: { orderId: dto.order_id, tenantId } });
         if (!payment)
             throw new common_1.NotFoundException('order_not_found');
+        const stripeAccount = await this.prisma.tenantStripeAccount.findUnique({
+            where: { tenantId },
+            select: {
+                connectAccountId: true,
+                chargesEnabled: true,
+                onboardingComplete: true,
+            },
+        });
+        if (!stripeAccount?.connectAccountId)
+            throw new common_1.ForbiddenException('stripe_connect_not_configured');
+        if (!stripeAccount.onboardingComplete || !stripeAccount.chargesEnabled) {
+            throw new common_1.ForbiddenException('stripe_connect_not_ready');
+        }
         const rawItems = this.normalizeRawItems(payment.items);
-        const resolvedItems = await this.resolveMenuPricedItems(rawItems);
+        const resolvedItems = await this.resolveMenuPricedItems(tenantId, rawItems);
         if (!resolvedItems.length)
             throw new common_1.BadRequestException('items_required');
         const items = resolvedItems.length ? this.toPersistedItems(resolvedItems) : rawItems;
+        const subtotalCents = this.totalFromResolvedItems(resolvedItems);
         let currency = 'usd';
         let lineItems = [];
         if (resolvedItems.length)
             lineItems = this.toStripeLineItems(resolvedItems, currency);
+        let deliveryFeeCents = 0;
         if (payment.fulfillment === 'delivery') {
-            const quote = await this.prisma.deliveryQuote.findUnique({ where: { orderId: dto.order_id } });
+            const quote = await this.prisma.deliveryQuote.findFirst({ where: { orderId: dto.order_id, tenantId } });
             if (!quote)
                 throw new common_1.BadRequestException('delivery_quote_required');
             if (dto.quote_id && dto.quote_id !== quote.quoteId)
@@ -272,17 +476,30 @@ let PaymentsService = class PaymentsService {
                 ...li,
                 price_data: li.price_data ? { ...li.price_data, currency } : li.price_data,
             }));
+            deliveryFeeCents = Math.max(0, quote.feeCents || 0);
             lineItems.push({
                 price_data: {
                     currency,
                     product_data: { name: 'Delivery Fee' },
-                    unit_amount: Math.max(0, quote.feeCents || 0),
+                    unit_amount: deliveryFeeCents,
                 },
                 quantity: 1,
             });
         }
-        //
-        const totalCents = lineItems.reduce((sum, li) => sum + (li.price_data?.unit_amount || 0) * (li.quantity || 1), 0);
+        const taxCents = Math.max(0, Math.round((subtotalCents * this.checkoutTaxBps()) / 10000));
+        if (taxCents > 0) {
+            lineItems.push({
+                price_data: {
+                    currency,
+                    product_data: { name: 'Tax' },
+                    unit_amount: taxCents,
+                },
+                quantity: 1,
+            });
+        }
+        const platformFeeCents = Math.max(0, Math.round((subtotalCents * this.platformFeeBps()) / 10000));
+        const applicationFeeCents = platformFeeCents + (payment.fulfillment === 'delivery' ? deliveryFeeCents : 0);
+        const totalCents = subtotalCents + taxCents + deliveryFeeCents;
         const amount = totalCents / 100;
         if (!Number.isFinite(amount) || amount <= 0)
             throw new common_1.BadRequestException('amount_required');
@@ -296,21 +513,49 @@ let PaymentsService = class PaymentsService {
             cancel_url: cancelUrl,
             client_reference_id: dto.order_id,
             payment_intent_data: {
+                transfer_data: {
+                    destination: stripeAccount.connectAccountId,
+                },
+                application_fee_amount: applicationFeeCents,
                 metadata: {
                     order_id: dto.order_id,
+                    tenant_id: tenantId,
                     channel: payment.channel || 'web',
                     fulfillment: payment.fulfillment || 'pickup',
                     customer_name: payment.customerName || '',
                     customer_phone: payment.customerPhone || '',
                     quote_id: dto.quote_id || '',
+                    connected_account_id: stripeAccount.connectAccountId,
                 },
             },
         });
-        await this.prisma.paymentLink.update({
-            where: { orderId: dto.order_id },
-            data: { amount, items, paymentLink: session.url || null, state: 'AWAITING_PAYMENT', updatedAt: new Date() },
+        await this.prisma.paymentLink.updateMany({
+            where: { orderId: dto.order_id, tenantId },
+            data: {
+                amount,
+                subtotalCents,
+                taxCents,
+                deliveryFeeCents,
+                applicationFeeCents,
+                connectedAccountId: stripeAccount.connectAccountId,
+                items,
+                paymentLink: session.url || null,
+                state: 'AWAITING_PAYMENT',
+                updatedAt: new Date(),
+            },
         });
-        return { order_id: dto.order_id, session_id: session.id, payment_link: session.url, amount, state: 'AWAITING_PAYMENT' };
+        return {
+            order_id: dto.order_id,
+            session_id: session.id,
+            payment_link: session.url,
+            amount,
+            subtotal_cents: subtotalCents,
+            tax_cents: taxCents,
+            delivery_fee_cents: deliveryFeeCents,
+            application_fee_cents: applicationFeeCents,
+            connected_account_id: stripeAccount.connectAccountId,
+            state: 'AWAITING_PAYMENT',
+        };
     }
 };
 exports.PaymentsService = PaymentsService;

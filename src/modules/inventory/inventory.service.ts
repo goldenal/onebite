@@ -13,8 +13,8 @@ export class InventoryService {
     return 'in-stock';
   }
 
-  async list() {
-    const rows = await this.prisma.inventoryItem.findMany({ orderBy: { itemName: 'asc' } });
+  async list(tenantId: string) {
+    const rows = await this.prisma.inventoryItem.findMany({ where: { tenantId }, orderBy: { itemName: 'asc' } });
     return rows.map((item) => ({
       itemId: item.itemId,
       itemName: item.itemName,
@@ -28,8 +28,8 @@ export class InventoryService {
     }));
   }
 
-  async get(itemId: string) {
-    const item = await this.prisma.inventoryItem.findUnique({ where: { itemId } });
+  async get(tenantId: string, itemId: string) {
+    const item = await this.prisma.inventoryItem.findFirst({ where: { itemId, tenantId } });
     if (!item) throw new NotFoundException('Inventory item not found');
     return {
       itemId: item.itemId,
@@ -44,12 +44,13 @@ export class InventoryService {
     };
   }
 
-  async create(dto: CreateInventoryDto) {
+  async create(tenantId: string, dto: CreateInventoryDto) {
     const status = this.inventoryStatus(dto.currentStock ?? 0, dto.minStock ?? 5);
     const lastRestocked = new Date();
     await this.prisma.inventoryItem.create({
       data: {
         itemId: dto.itemId,
+        tenantId,
         itemName: dto.itemName,
         currentStock: dto.currentStock ?? 0,
         minStock: dto.minStock ?? 5,
@@ -73,8 +74,8 @@ export class InventoryService {
     };
   }
 
-  async update(itemId: string, dto: UpdateInventoryDto) {
-    const existing = await this.prisma.inventoryItem.findUnique({ where: { itemId } });
+  async update(tenantId: string, itemId: string, dto: UpdateInventoryDto) {
+    const existing = await this.prisma.inventoryItem.findFirst({ where: { itemId, tenantId } });
     if (!existing) throw new NotFoundException('Inventory item not found');
 
     const newCurrent = dto.currentStock ?? existing.currentStock ?? 0;
@@ -85,8 +86,8 @@ export class InventoryService {
         ? new Date()
         : existing.lastRestocked;
 
-    await this.prisma.inventoryItem.update({
-      where: { itemId },
+    await this.prisma.inventoryItem.updateMany({
+      where: { itemId, tenantId },
       data: {
         currentStock: newCurrent,
         minStock: newMin,
@@ -111,10 +112,10 @@ export class InventoryService {
     };
   }
 
-  async remove(itemId: string) {
-    const existing = await this.prisma.inventoryItem.findUnique({ where: { itemId } });
+  async remove(tenantId: string, itemId: string) {
+    const existing = await this.prisma.inventoryItem.findFirst({ where: { itemId, tenantId } });
     if (!existing) throw new NotFoundException('Inventory item not found');
-    await this.prisma.inventoryItem.delete({ where: { itemId } });
+    await this.prisma.inventoryItem.deleteMany({ where: { itemId, tenantId } });
     return { message: 'Inventory item deleted successfully' };
   }
 }

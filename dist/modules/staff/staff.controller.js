@@ -11,6 +11,9 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StaffController = void 0;
 const common_1 = require("@nestjs/common");
@@ -19,12 +22,15 @@ const config_1 = require("@nestjs/config");
 const auth_service_1 = require("../auth/auth.service");
 const auth_util_1 = require("../auth/auth.util");
 const error_response_1 = require("../../common/errors/error-response");
+const current_tenant_decorator_1 = require("../../common/tenant/current-tenant.decorator");
+const tenant_required_guard_1 = require("../../common/tenant/tenant-required.guard");
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 let StaffController = class StaffController {
     constructor(auth, config) {
         this.auth = auth;
         this.config = config;
     }
-    access(body) {
+    access(tenant, body) {
         const portalCode = this.auth.getStaffPortalCode();
         if (!portalCode)
             throw new common_1.UnauthorizedException('staff_code_not_configured');
@@ -33,8 +39,8 @@ let StaffController = class StaffController {
         const secret = this.config.get('JWT_SECRET');
         if (!secret)
             throw new common_1.UnauthorizedException('JWT_SECRET is required');
-        const token = (0, auth_util_1.signStaffToken)(secret, this.config.get('AUTH_TOKEN_TTL') || '24h');
-        return { success: true, token };
+        const token = (0, auth_util_1.signStaffToken)(secret, this.config.get('AUTH_TOKEN_TTL') || '24h', tenant.id);
+        return { success: true, token, tenantId: tenant.id };
     }
     verify(req, res) {
         const portalCode = this.auth.getStaffPortalCode();
@@ -65,7 +71,22 @@ let StaffController = class StaffController {
         }
         try {
             const ok = (0, auth_util_1.verifyStaffToken)(token, secret);
+            const tenantId = req.tenant?.id;
+            const payloadTenantId = (() => {
+                try {
+                    const payload = jsonwebtoken_1.default.decode(token);
+                    return payload?.tenantId;
+                }
+                catch {
+                    return undefined;
+                }
+            })();
             if (!ok) {
+                return res
+                    .status(common_1.HttpStatus.UNAUTHORIZED)
+                    .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.UNAUTHORIZED, code: 'unauthorized', path: req.url }));
+            }
+            if (tenantId && payloadTenantId && payloadTenantId !== tenantId) {
                 return res
                     .status(common_1.HttpStatus.UNAUTHORIZED)
                     .json((0, error_response_1.createErrorEnvelope)({ statusCode: common_1.HttpStatus.UNAUTHORIZED, code: 'unauthorized', path: req.url }));
@@ -86,9 +107,10 @@ exports.StaffController = StaffController;
 __decorate([
     (0, common_1.Post)('access'),
     (0, swagger_1.ApiBody)({ schema: { example: { code: '123456' } } }),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", void 0)
 ], StaffController.prototype, "access", null);
 __decorate([
@@ -109,5 +131,6 @@ __decorate([
 exports.StaffController = StaffController = __decorate([
     (0, swagger_1.ApiTags)('staff'),
     (0, common_1.Controller)('staff'),
+    (0, common_1.UseGuards)(tenant_required_guard_1.TenantRequiredGuard),
     __metadata("design:paramtypes", [auth_service_1.AuthService, config_1.ConfigService])
 ], StaffController);

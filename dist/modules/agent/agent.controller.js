@@ -17,23 +17,25 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const auth_guard_1 = require("../auth/auth.guard");
 const kitchen_service_1 = require("../kitchen/kitchen.service");
+const current_tenant_decorator_1 = require("../../common/tenant/current-tenant.decorator");
+const tenant_required_guard_1 = require("../../common/tenant/tenant-required.guard");
 let AgentController = class AgentController {
     constructor(kitchen) {
         this.kitchen = kitchen;
     }
-    async confirmPayment(body) {
+    async confirmPayment(tenant, body) {
         const cartId = body?.cart_id;
         if (!cartId)
             throw new common_1.BadRequestException('cart_id_required');
         const orderId = `ord_${cartId}`;
-        const order = await this.kitchen.getOrder(orderId);
+        const order = await this.kitchen.getOrder(tenant.id, orderId);
         return { paid: !!order, order_id: order ? order.id : null };
     }
-    async generatePickup(body) {
+    async generatePickup(tenant, body) {
         const orderId = body?.order_id;
         if (!orderId)
             throw new common_1.BadRequestException('order_id_required');
-        return this.kitchen.generatePickup(orderId);
+        return this.kitchen.generatePickup(tenant.id, orderId);
     }
 };
 exports.AgentController = AgentController;
@@ -42,9 +44,10 @@ __decorate([
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
     (0, swagger_1.ApiBearerAuth)('bearer'),
     (0, swagger_1.ApiBody)({ schema: { example: { cart_id: 'cart_123' } } }),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AgentController.prototype, "confirmPayment", null);
 __decorate([
@@ -52,13 +55,15 @@ __decorate([
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard),
     (0, swagger_1.ApiBearerAuth)('bearer'),
     (0, swagger_1.ApiBody)({ schema: { example: { order_id: 'ord_12345' } } }),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AgentController.prototype, "generatePickup", null);
 exports.AgentController = AgentController = __decorate([
     (0, swagger_1.ApiTags)('agent'),
     (0, common_1.Controller)('agent'),
+    (0, common_1.UseGuards)(tenant_required_guard_1.TenantRequiredGuard),
     __metadata("design:paramtypes", [kitchen_service_1.KitchenService])
 ], AgentController);

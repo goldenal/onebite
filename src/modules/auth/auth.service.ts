@@ -4,8 +4,15 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 
-export type AuthRole = 'admin' | 'kitchen';
-export type AuthPayload = { username: string; role: AuthRole };
+export type AuthRole = 'admin' | 'kitchen' | 'customer' | 'platform';
+export type AuthPayload = {
+  sub: string;
+  role: AuthRole;
+  tenantId?: string;
+  username?: string;
+  email?: string;
+  locationIds?: string[] | null;
+};
 
 @Injectable()
 export class AuthService {
@@ -21,38 +28,50 @@ export class AuthService {
     return jwt.verify(token, this.getJwtSecret()) as AuthPayload;
   }
 
-  async loginWithRole(role: AuthRole, username: string, password: string) {
-    const user = await this.prisma.staffUser.findUnique({ where: { username } });
-    if (!user || user.role !== role) throw new UnauthorizedException('Invalid username or password');
+  private allowedMembershipRoles(role: 'admin' | 'kitchen'): string[] {
+    if (role === 'admin') return ['owner', 'admin'];
+    return ['owner', 'admin', 'kitchen', 'staff'];
+  }
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
+  async loginWithRole(
+    role: 'admin' | 'kitchen',
+    username: string,
+    password: string,
+    tenantIdHint?: string,
+  ) {
+    const identity = username.trim();
+    const normalizedEmail = identity.toLowerCase();
+    const allowedRoles = this.allowedMembershipRoles(role);
+    const normalizedTenantIdHint = typeof tenantIdHint === 'string' ? tenantIdHint.trim() : '';
+
+    const memberships = await this.prisma.tenantMembership.findMany({
+      where: {
+        user: { email: normalizedEmail },
+        role: { in: allowedRoles },
+        tenant: { status: 'active' },
+        ...(normalizedTenantIdHint ? { tenantId: normalizedTenantIdHint } : {}),
+      },
+      include: { user: true },
+      orderBy: { createdAt: 'asc' },
+      take: normalizedTenantIdHint ? 1 : 2,
+    });
+
+    if (!memberships.length) throw new UnauthorizedException('Invalid username or password');
+    if (!normalizedTenantIdHint && memberships.length > 1) {
+      throw new UnauthorizedException('multiple_tenants_for_credentials');
+    }
+
+    const membership = memberships[0];
+    const ok = await bcrypt.compare(password, membership.user.passwordHash);
     if (!ok) throw new UnauthorizedException('Invalid username or password');
 
-    return { username: user.username, role };
-  }
-
-  async createKitchenUser(username: string, password: string) {
-    const hash = await bcrypt.hash(password, 10);
-    const user = await this.prisma.staffUser.upsert({
-      where: { username },
-      update: { passwordHash: hash, role: 'kitchen' },
-      create: { username, passwordHash: hash, role: 'kitchen' },
-    });
-    return { username: user.username, role: 'kitchen' as const };
-  }
-
-  async createAdminUser(username: string, password: string) {
-    const hash = await bcrypt.hash(password, 10);
-    const user = await this.prisma.staffUser.upsert({
-      where: { username },
-      update: { passwordHash: hash, role: 'admin' },
-      create: { username, passwordHash: hash, role: 'admin' },
-    });
-    return { username: user.username, role: 'admin' as const };
-  }
-
-  getStaffPortalCode() {
-    return (this.config.get<string>('STAFF_PORTAL_CODE') || '').trim();
+    return {
+      id: membership.user.id,
+      username: membership.user.email,
+      role,
+      tenantId: membership.tenantId,
+      locationIds: this.toLocationIds(membership.locationIds),
+    };
   }
 
   private getJwtSecret() {
@@ -63,5 +82,10 @@ export class AuthService {
 
   private getAuthTokenTtl() {
     return this.config.get<string>('AUTH_TOKEN_TTL') || '24h';
+  }
+
+  private toLocationIds(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((entry): entry is string => typeof entry === 'string');
   }
 }

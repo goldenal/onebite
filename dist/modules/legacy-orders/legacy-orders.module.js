@@ -10,12 +10,13 @@ exports.LegacyOrdersModule = void 0;
 const common_1 = require("@nestjs/common");
 const legacy_orders_controller_1 = require("./legacy-orders.controller");
 const legacy_orders_service_1 = require("./legacy-orders.service");
+const order_tracking_controller_1 = require("./order-tracking.controller");
 let LegacyOrdersModule = class LegacyOrdersModule {
 };
 exports.LegacyOrdersModule = LegacyOrdersModule;
 exports.LegacyOrdersModule = LegacyOrdersModule = __decorate([
     (0, common_1.Module)({
-        controllers: [legacy_orders_controller_1.LegacyOrdersController],
+        controllers: [legacy_orders_controller_1.LegacyOrdersController, order_tracking_controller_1.OrderTrackingController],
         providers: [legacy_orders_service_1.LegacyOrdersService],
     })
 ], LegacyOrdersModule);

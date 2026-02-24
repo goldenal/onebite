@@ -20,6 +20,8 @@ const create_review_dto_1 = require("./dto/create-review.dto");
 const update_review_dto_1 = require("./dto/update-review.dto");
 const reply_dto_1 = require("./dto/reply.dto");
 const auth_guard_1 = require("../auth/auth.guard");
+const tenant_required_guard_1 = require("../../common/tenant/tenant-required.guard");
+const current_tenant_decorator_1 = require("../../common/tenant/current-tenant.decorator");
 let ReviewsController = class ReviewsController {
     constructor(reviews) {
         this.reviews = reviews;
@@ -28,59 +30,59 @@ let ReviewsController = class ReviewsController {
         const user = req.user;
         return user?.role === 'admin';
     }
-    async listAdmin() {
-        return this.reviews.listAdmin();
+    async listAdmin(tenant) {
+        return this.reviews.listAdmin(tenant.id);
     }
-    async requestAccess(body) {
-        return this.reviews.requestAccess(body);
+    async requestAccess(tenant, body) {
+        return this.reviews.requestAccess(tenant.id, body);
     }
-    async listApproved() {
-        return this.reviews.listApproved();
+    async listApproved(tenant) {
+        return this.reviews.listApproved(tenant.id);
     }
-    async create(body) {
-        return this.reviews.create(body);
+    async create(tenant, body) {
+        return this.reviews.create(tenant.id, body);
     }
-    async update(id, body) {
-        return this.reviews.update(id, body);
+    async update(tenant, id, body) {
+        return this.reviews.update(tenant.id, id, body);
     }
-    async remove(id) {
-        return this.reviews.remove(id);
+    async remove(tenant, id) {
+        return this.reviews.remove(tenant.id, id);
     }
-    async adminConversations() {
-        return this.reviews.adminConversations();
+    async adminConversations(tenant) {
+        return this.reviews.adminConversations(tenant.id);
     }
-    async adminUnreadCount() {
-        return this.reviews.adminUnreadCount();
+    async adminUnreadCount(tenant) {
+        return this.reviews.adminUnreadCount(tenant.id);
     }
-    async adminMarkRead(id) {
-        return this.reviews.adminMarkRead(id);
+    async adminMarkRead(tenant, id) {
+        return this.reviews.adminMarkRead(tenant.id, id);
     }
-    async adminConversation(id) {
-        return this.reviews.adminConversation(id);
+    async adminConversation(tenant, id) {
+        return this.reviews.adminConversation(tenant.id, id);
     }
-    async publicWithReplies() {
-        return this.reviews.publicWithReplies();
+    async publicWithReplies(tenant) {
+        return this.reviews.publicWithReplies(tenant.id);
     }
-    async get(id) {
-        return this.reviews.get(id);
+    async get(tenant, id) {
+        return this.reviews.get(tenant.id, id);
     }
-    async listReplies(id) {
-        return this.reviews.listReplies(id);
+    async listReplies(tenant, id) {
+        return this.reviews.listReplies(tenant.id, id);
     }
-    async createReply(id, body) {
-        return this.reviews.createReply(id, body);
+    async createReply(tenant, id, body) {
+        return this.reviews.createReply(tenant.id, id, body);
     }
-    async createPublicReply(req, id, body) {
-        return this.reviews.createPublicReply(id, body, this.isAdmin(req));
+    async createPublicReply(req, tenant, id, body) {
+        return this.reviews.createPublicReply(tenant.id, id, body, this.isAdmin(req));
     }
-    async deleteReply(reviewId, replyId) {
-        return this.reviews.deleteReply(reviewId, replyId);
+    async deleteReply(tenant, reviewId, replyId) {
+        return this.reviews.deleteReply(tenant.id, reviewId, replyId);
     }
-    async myReviews(req, body) {
-        return this.reviews.myReviews(body, this.isAdmin(req));
+    async myReviews(req, tenant, body) {
+        return this.reviews.myReviews(tenant.id, body, this.isAdmin(req));
     }
-    async markRead(req, id, body) {
-        return this.reviews.markRead(id, body, this.isAdmin(req));
+    async markRead(req, tenant, id, body) {
+        return this.reviews.markRead(tenant.id, id, body, this.isAdmin(req));
     }
 };
 exports.ReviewsController = ReviewsController;
@@ -88,158 +90,177 @@ __decorate([
     (0, common_1.Get)(),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "listAdmin", null);
 __decorate([
     (0, common_1.Post)('access/request'),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [reply_dto_1.RequestAccessDto]),
+    __metadata("design:paramtypes", [Object, reply_dto_1.RequestAccessDto]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "requestAccess", null);
 __decorate([
     (0, common_1.Get)('approved'),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "listApproved", null);
 __decorate([
     (0, common_1.Post)(),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_review_dto_1.CreateReviewDto]),
+    __metadata("design:paramtypes", [Object, create_review_dto_1.CreateReviewDto]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "create", null);
 __decorate([
     (0, common_1.Put)(':id'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, update_review_dto_1.UpdateReviewDto]),
+    __metadata("design:paramtypes", [Object, String, update_review_dto_1.UpdateReviewDto]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':id'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "remove", null);
 __decorate([
     (0, common_1.Get)('admin/conversations'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "adminConversations", null);
 __decorate([
     (0, common_1.Get)('admin/unread-count'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "adminUnreadCount", null);
 __decorate([
     (0, common_1.Put)('admin/:id/mark-read'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "adminMarkRead", null);
 __decorate([
     (0, common_1.Get)('admin/:id/conversation'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "adminConversation", null);
 __decorate([
     (0, common_1.Get)('public/with-replies'),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "publicWithReplies", null);
 __decorate([
     (0, common_1.Get)(':id'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "get", null);
 __decorate([
     (0, common_1.Get)(':id/replies'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "listReplies", null);
 __decorate([
     (0, common_1.Post)(':id/replies'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, reply_dto_1.CreateReplyDto]),
+    __metadata("design:paramtypes", [Object, String, reply_dto_1.CreateReplyDto]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "createReply", null);
 __decorate([
     (0, common_1.Post)(':id/replies/public'),
     (0, common_1.UseGuards)(auth_guard_1.OptionalAuthGuard),
     __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Param)('id')),
-    __param(2, (0, common_1.Body)()),
+    __param(1, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(2, (0, common_1.Param)('id')),
+    __param(3, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, reply_dto_1.CreatePublicReplyDto]),
+    __metadata("design:paramtypes", [Object, Object, String, reply_dto_1.CreatePublicReplyDto]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "createPublicReply", null);
 __decorate([
     (0, common_1.Delete)(':reviewId/replies/:replyId'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('reviewId')),
-    __param(1, (0, common_1.Param)('replyId')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('reviewId')),
+    __param(2, (0, common_1.Param)('replyId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:paramtypes", [Object, String, String]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "deleteReply", null);
 __decorate([
     (0, common_1.Post)('my-reviews'),
     (0, common_1.UseGuards)(auth_guard_1.OptionalAuthGuard),
     __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Body)()),
+    __param(1, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, reply_dto_1.MyReviewsDto]),
+    __metadata("design:paramtypes", [Object, Object, reply_dto_1.MyReviewsDto]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "myReviews", null);
 __decorate([
     (0, common_1.Put)(':id/replies/mark-read'),
     (0, common_1.UseGuards)(auth_guard_1.OptionalAuthGuard),
     __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Param)('id')),
-    __param(2, (0, common_1.Body)()),
+    __param(1, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(2, (0, common_1.Param)('id')),
+    __param(3, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, reply_dto_1.MarkReadDto]),
+    __metadata("design:paramtypes", [Object, Object, String, reply_dto_1.MarkReadDto]),
     __metadata("design:returntype", Promise)
 ], ReviewsController.prototype, "markRead", null);
 exports.ReviewsController = ReviewsController = __decorate([
     (0, swagger_1.ApiTags)('reviews'),
     (0, common_1.Controller)('reviews'),
+    (0, common_1.UseGuards)(tenant_required_guard_1.TenantRequiredGuard),
     __metadata("design:paramtypes", [reviews_service_1.ReviewsService])
 ], ReviewsController);

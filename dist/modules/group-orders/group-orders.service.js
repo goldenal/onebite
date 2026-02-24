@@ -25,8 +25,8 @@ let GroupOrdersService = class GroupOrdersService {
             code += chars.charAt(Math.floor(Math.random() * chars.length));
         return code;
     }
-    async listAdmin() {
-        const rows = await this.prisma.groupOrder.findMany({ orderBy: { createdAt: 'desc' } });
+    async listAdmin(tenantId) {
+        const rows = await this.prisma.groupOrder.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } });
         return rows.map((o) => ({
             id: o.id,
             initiatorName: o.initiatorName,
@@ -35,12 +35,12 @@ let GroupOrdersService = class GroupOrdersService {
             expiresAt: o.expiresAt ? Number(o.expiresAt) : null,
         }));
     }
-    async get(id) {
-        const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+    async get(tenantId, id) {
+        const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
         if (!order)
             throw new common_1.NotFoundException('Group order not found');
         const items = await this.prisma.groupOrderItem.findMany({
-            where: { groupOrderId: id },
+            where: { groupOrderId: id, tenantId },
             orderBy: { createdAt: 'desc' },
         });
         const formattedItems = items.map((item) => ({
@@ -74,13 +74,14 @@ let GroupOrdersService = class GroupOrdersService {
             participantCount: Object.keys(participantMap).length,
         };
     }
-    async create(dto) {
+    async create(tenantId, dto) {
         const id = this.generateGroupCode();
         const createdAt = BigInt(Date.now());
         const expiresAt = createdAt + BigInt(24 * 60 * 60 * 1000);
         await this.prisma.groupOrder.create({
             data: {
                 id,
+                tenantId,
                 initiatorName: dto.initiatorName.trim(),
                 status: 'active',
                 createdAt,
@@ -96,14 +97,14 @@ let GroupOrdersService = class GroupOrdersService {
             shareLink: `/group-order/${id}`,
         };
     }
-    async addItem(id, dto) {
-        const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+    async addItem(tenantId, id, dto) {
+        const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
         if (!order)
             throw new common_1.NotFoundException('Group order not found');
         if (order.status !== 'active')
             throw new common_1.NotFoundException('Group order is no longer active');
         if (order.expiresAt && Date.now() > Number(order.expiresAt)) {
-            await this.prisma.groupOrder.update({ where: { id }, data: { status: 'expired' } });
+            await this.prisma.groupOrder.updateMany({ where: { id, tenantId }, data: { status: 'expired' } });
             throw new common_1.NotFoundException('Group order has expired');
         }
         const itemId = (0, crypto_1.randomUUID)();
@@ -112,6 +113,7 @@ let GroupOrdersService = class GroupOrdersService {
         await this.prisma.groupOrderItem.create({
             data: {
                 id: itemId,
+                tenantId,
                 groupOrderId: id,
                 participantName: dto.participantName.trim(),
                 menuItemId: dto.menuItem.id,
@@ -140,25 +142,30 @@ let GroupOrdersService = class GroupOrdersService {
             createdAt: Number(createdAt),
         };
     }
-    async removeItem(id, itemId) {
-        const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+    async removeItem(tenantId, id, itemId) {
+        const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
         if (!order)
             throw new common_1.NotFoundException('Group order not found');
         if (order.status !== 'active')
             throw new common_1.NotFoundException('Group order is no longer active');
-        const deleted = await this.prisma.groupOrderItem.deleteMany({ where: { id: itemId, groupOrderId: id } });
+        const deleted = await this.prisma.groupOrderItem.deleteMany({ where: { id: itemId, groupOrderId: id, tenantId } });
         if (deleted.count === 0)
             throw new common_1.NotFoundException('Item not found in group order');
         return { message: 'Item removed from group order' };
     }
-    async updateStatus(id, dto) {
-        const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+    async updateStatus(tenantId, id, dto) {
+        const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
         if (!order)
             throw new common_1.NotFoundException('Group order not found');
-        const updated = await this.prisma.groupOrder.update({
-            where: { id },
+        const updatedRows = await this.prisma.groupOrder.updateMany({
+            where: { id, tenantId },
             data: { status: dto.status },
         });
+        if (!updatedRows.count)
+            throw new common_1.NotFoundException('Group order not found');
+        const updated = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
+        if (!updated)
+            throw new common_1.NotFoundException('Group order not found');
         return {
             id: updated.id,
             initiatorName: updated.initiatorName,
@@ -167,12 +174,12 @@ let GroupOrdersService = class GroupOrdersService {
             expiresAt: updated.expiresAt ? Number(updated.expiresAt) : null,
         };
     }
-    async participantItems(id, participantName) {
-        const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+    async participantItems(tenantId, id, participantName) {
+        const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
         if (!order)
             throw new common_1.NotFoundException('Group order not found');
         const items = await this.prisma.groupOrderItem.findMany({
-            where: { groupOrderId: id, participantName },
+            where: { groupOrderId: id, participantName, tenantId },
             orderBy: { createdAt: 'desc' },
         });
         const formatted = items.map((item) => ({

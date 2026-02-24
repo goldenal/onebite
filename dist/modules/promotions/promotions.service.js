@@ -39,14 +39,15 @@ let PromotionsService = class PromotionsService {
             createdAt: p.createdAt ? Number(p.createdAt) : null,
         };
     }
-    async list() {
-        const rows = await this.prisma.promotion.findMany({ orderBy: { createdAt: 'desc' } });
+    async list(tenantId) {
+        const rows = await this.prisma.promotion.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } });
         return rows.map((p) => this.toPromotion(p));
     }
-    async listActive() {
+    async listActive(tenantId) {
         const today = new Date().toISOString().split('T')[0];
         const rows = await this.prisma.promotion.findMany({
             where: {
+                tenantId,
                 active: true,
                 AND: [
                     {
@@ -61,18 +62,19 @@ let PromotionsService = class PromotionsService {
         });
         return rows.map((p) => this.toPromotion(p));
     }
-    async get(id) {
-        const promo = await this.prisma.promotion.findUnique({ where: { id } });
+    async get(tenantId, id) {
+        const promo = await this.prisma.promotion.findFirst({ where: { id, tenantId } });
         if (!promo)
             throw new common_1.NotFoundException('Promotion not found');
         return this.toPromotion(promo);
     }
-    async create(dto) {
+    async create(tenantId, dto) {
         const id = (0, crypto_1.randomUUID)();
         const createdAt = BigInt(Date.now());
         const promo = await this.prisma.promotion.create({
             data: {
                 id,
+                tenantId,
                 name: dto.name,
                 description: dto.description,
                 type: dto.type,
@@ -94,8 +96,8 @@ let PromotionsService = class PromotionsService {
         });
         return this.toPromotion(promo);
     }
-    async update(id, dto) {
-        const existing = await this.prisma.promotion.findUnique({ where: { id } });
+    async update(tenantId, id, dto) {
+        const existing = await this.prisma.promotion.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Promotion not found');
         const updateData = {};
@@ -131,17 +133,22 @@ let PromotionsService = class PromotionsService {
             updateData.timeStart = dto.timeStart;
         if (dto.timeEnd !== undefined)
             updateData.timeEnd = dto.timeEnd;
-        const promo = await this.prisma.promotion.update({
-            where: { id },
+        const updatedRows = await this.prisma.promotion.updateMany({
+            where: { id, tenantId },
             data: updateData,
         });
+        if (!updatedRows.count)
+            throw new common_1.NotFoundException('Promotion not found');
+        const promo = await this.prisma.promotion.findFirst({ where: { id, tenantId } });
+        if (!promo)
+            throw new common_1.NotFoundException('Promotion not found');
         return this.toPromotion(promo);
     }
-    async remove(id) {
-        const existing = await this.prisma.promotion.findUnique({ where: { id } });
+    async remove(tenantId, id) {
+        const existing = await this.prisma.promotion.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Promotion not found');
-        await this.prisma.promotion.delete({ where: { id } });
+        await this.prisma.promotion.deleteMany({ where: { id, tenantId } });
         return { message: 'Promotion deleted successfully' };
     }
 };

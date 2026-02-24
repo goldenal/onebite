@@ -20,6 +20,13 @@ let TabletService = class TabletService {
         this.prisma = prisma;
         this.config = config;
     }
+    scopedTabletId(tenantId, tabletId) {
+        return `${tenantId}::${tabletId}`;
+    }
+    unscopedTabletId(tenantId, scopedTabletId) {
+        const prefix = `${tenantId}::`;
+        return scopedTabletId.startsWith(prefix) ? scopedTabletId.slice(prefix.length) : scopedTabletId;
+    }
     questionLimit() {
         return Number(this.config.get('TABLET_QUESTION_LIMIT') || 10);
     }
@@ -49,9 +56,10 @@ let TabletService = class TabletService {
     }
     async touchSession(options) {
         const now = new Date();
+        const scopedTabletId = this.scopedTabletId(options.tenantId, options.tabletId);
         // QUERY 1: Get existing session
         const existing = await this.prisma.tabletSession.findUnique({
-            where: { tabletId: options.tabletId }
+            where: { tabletId: scopedTabletId }
         });
         let session = existing;
         let sessionReset = false;
@@ -99,9 +107,11 @@ let TabletService = class TabletService {
             : Number(session?.questionCount || 0);
         // QUERY 2: Single upsert with all updates
         const updated = await this.prisma.tabletSession.upsert({
-            where: { tabletId: options.tabletId },
+            where: { tabletId: scopedTabletId },
             create: {
-                tabletId: options.tabletId,
+                tabletId: scopedTabletId,
+                tenantId: options.tenantId,
+                locationId: options.locationId ?? null,
                 sessionId: (0, crypto_1.randomUUID)(),
                 questionCount: newQuestionCount,
                 lastActivityTimestamp: now,
@@ -112,6 +122,8 @@ let TabletService = class TabletService {
             },
             update: shouldResetSession ? {
                 // Reset everything
+                tenantId: options.tenantId,
+                locationId: options.locationId ?? session?.locationId ?? null,
                 sessionId: (0, crypto_1.randomUUID)(),
                 questionCount: newQuestionCount,
                 warningSent: false,
@@ -121,6 +133,8 @@ let TabletService = class TabletService {
                 lastActivityTimestamp: now,
             } : {
                 // Normal update
+                tenantId: options.tenantId,
+                locationId: options.locationId ?? session?.locationId ?? null,
                 lastActivityTimestamp: now,
                 questionCount: newQuestionCount,
                 orderStatus: options.orderStatusOverride ?? session?.orderStatus ?? 'NONE',
@@ -131,7 +145,10 @@ let TabletService = class TabletService {
         });
         const remainingQuestions = this.clampRemaining(Number(updated.questionCount || 0));
         return {
-            session: updated,
+            session: {
+                ...updated,
+                tabletId: this.unscopedTabletId(options.tenantId, updated.tabletId),
+            },
             sessionReset,
             clearCart,
             showPreTimeoutWarning,

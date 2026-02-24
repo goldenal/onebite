@@ -15,7 +15,6 @@ const health_module_1 = require("./modules/health/health.module");
 const menu_module_1 = require("./modules/menu/menu.module");
 const settings_module_1 = require("./modules/settings/settings.module");
 const auth_module_1 = require("./modules/auth/auth.module");
-const staff_module_1 = require("./modules/staff/staff.module");
 const inventory_module_1 = require("./modules/inventory/inventory.module");
 const reservations_module_1 = require("./modules/reservations/reservations.module");
 const promotions_module_1 = require("./modules/promotions/promotions.module");
@@ -33,6 +32,11 @@ const voice_module_1 = require("./modules/voice/voice.module");
 const locations_module_1 = require("./modules/locations/locations.module");
 const log_body_interceptor_1 = require("./common/interceptors/log-body.interceptor");
 const core_1 = require("@nestjs/core");
+const tenant_module_1 = require("./common/tenant/tenant.module");
+const tenant_middleware_1 = require("./common/tenant/tenant.middleware");
+const public_module_1 = require("./modules/public/public.module");
+const customers_module_1 = require("./modules/customers/customers.module");
+const platform_module_1 = require("./modules/platform/platform.module");
 const prettyTarget = (() => {
     try {
         // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -43,6 +47,9 @@ const prettyTarget = (() => {
     }
 })();
 let AppModule = class AppModule {
+    configure(consumer) {
+        consumer.apply(tenant_middleware_1.TenantMiddleware).forRoutes('*');
+    }
 };
 exports.AppModule = AppModule;
 exports.AppModule = AppModule = __decorate([
@@ -50,6 +57,7 @@ exports.AppModule = AppModule = __decorate([
         imports: [
             config_module_1.ConfigModule,
             prisma_module_1.PrismaModule,
+            tenant_module_1.TenantModule,
             nestjs_pino_1.LoggerModule.forRoot({
                 pinoHttp: {
                     level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'info'),
@@ -83,7 +91,6 @@ exports.AppModule = AppModule = __decorate([
             menu_module_1.MenuModule,
             settings_module_1.SettingsModule,
             auth_module_1.AuthModule,
-            staff_module_1.StaffModule,
             inventory_module_1.InventoryModule,
             reservations_module_1.ReservationsModule,
             promotions_module_1.PromotionsModule,
@@ -99,6 +106,9 @@ exports.AppModule = AppModule = __decorate([
             tablet_module_1.TabletModule,
             chat_module_1.ChatModule,
             voice_module_1.VoiceModule,
+            public_module_1.PublicModule,
+            customers_module_1.CustomersModule,
+            platform_module_1.PlatformModule,
         ],
         providers: [
             {
@@ -108,4 +118,3 @@ exports.AppModule = AppModule = __decorate([
         ],
     })
 ], AppModule);
-// 

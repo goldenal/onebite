@@ -12,19 +12,17 @@ var ChatService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChatService = void 0;
 const common_1 = require("@nestjs/common");
-const config_1 = require("@nestjs/config");
 const prisma_service_1 = require("../../prisma/prisma.service");
 const tablet_service_1 = require("../tablet/tablet.service");
 let ChatService = ChatService_1 = class ChatService {
-    constructor(prisma, tablet, config) {
+    constructor(prisma, tablet) {
         this.prisma = prisma;
         this.tablet = tablet;
-        this.config = config;
         this.logger = new common_1.Logger(ChatService_1.name);
     }
-    async handleChat(body) {
+    async handleChat(tenantId, body) {
         const tabletId = (body.tabletId || 'default-tablet').trim();
-        const sessionResult = await this.tablet.touchSession({ tabletId, incrementQuestions: true });
+        const sessionResult = await this.tablet.touchSession({ tenantId, tabletId, incrementQuestions: true });
         const sessionPayload = {
             sessionId: sessionResult.session.sessionId,
             tabletId: sessionResult.session.tabletId,
@@ -54,6 +52,7 @@ let ChatService = ChatService_1 = class ChatService {
         // Simple placeholder response; OpenAI/Groq/ElevenLabs wiring is next
         const assistantMessage = `This is a placeholder response. You said: "${body.message}"`;
         await this.tablet.touchSession({
+            tenantId,
             tabletId,
             appendMessages: [
                 { role: 'user', content: body.message },
@@ -67,11 +66,12 @@ let ChatService = ChatService_1 = class ChatService {
             chatDisabled: false,
         };
     }
-    async reset(tabletId) {
+    async reset(tenantId, tabletId) {
         const id = (tabletId || 'default-tablet').trim();
+        const scopedTabletId = `${tenantId}::${id}`;
         try {
             await this.prisma.tabletSession.update({
-                where: { tabletId: id },
+                where: { tabletId: scopedTabletId },
                 data: { conversationHistory: [], questionCount: 0, warningSent: false, agentConversationId: null },
             });
         }
@@ -88,6 +88,5 @@ exports.ChatService = ChatService;
 exports.ChatService = ChatService = ChatService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        tablet_service_1.TabletService,
-        config_1.ConfigService])
+        tablet_service_1.TabletService])
 ], ChatService);

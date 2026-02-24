@@ -26,12 +26,13 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
         this.logger.error(`${context} failed: ${error instanceof Error ? error.message : String(error)}`, error instanceof Error ? error.stack : undefined);
         throw new common_1.InternalServerErrorException(fallbackMessage);
     }
-    async request(dto) {
+    async request(tenantId, dto) {
         try {
             const eta = '25 minutes';
             await this.prisma.deliveryRequest.upsert({
                 where: { orderId: dto.order_id },
                 update: {
+                    tenantId,
                     provider: dto.provider || 'manual',
                     deliveryId: null,
                     status: 'Preparing',
@@ -40,6 +41,7 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
                 },
                 create: {
                     orderId: dto.order_id,
+                    tenantId,
                     provider: dto.provider || 'manual',
                     deliveryId: null,
                     status: 'Preparing',
@@ -52,20 +54,20 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
             this.handleError(error, 'request', 'delivery_request_failed');
         }
     }
-    async quote(dto) {
+    async quote(tenantId, dto) {
         try {
             const orderId = dto.order_id?.trim() || null;
             const provider = dto.provider || 'uber_direct';
             if (provider !== 'uber_direct')
                 throw new common_1.BadRequestException('unsupported_provider');
             if (orderId) {
-                const payment = await this.prisma.paymentLink.findUnique({ where: { orderId } });
+                const payment = await this.prisma.paymentLink.findFirst({ where: { orderId, tenantId } });
                 if (!payment)
                     throw new common_1.NotFoundException('order_not_found');
                 if (payment.fulfillment !== 'delivery')
                     throw new common_1.BadRequestException('not_delivery');
             }
-            const location = await this.prisma.location.findUnique({ where: { id: dto.location_id } });
+            const location = await this.prisma.location.findFirst({ where: { id: dto.location_id, tenantId } });
             if (!location)
                 throw new common_1.NotFoundException('location_not_found');
             const pickup = this.uber.toUberAddress({
@@ -93,7 +95,6 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
                     },
                 });
             }
-            //
             const quoteId = String(quote.id || quote.quote_id || '');
             const feeAmount = Number(quote.fee?.amount ?? quote.fee?.value ?? quote.fee ?? 0);
             const currency = String(quote.fee?.currency_code || quote.fee?.currency || quote.currency || 'USD');
@@ -106,6 +107,7 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
                     await tx.deliveryAddress.upsert({
                         where: { orderId },
                         update: {
+                            tenantId,
                             locationId: dto.location_id,
                             name: dto.dropoff_name ?? null,
                             phone: dto.dropoff_phone ?? null,
@@ -120,6 +122,7 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
                         },
                         create: {
                             orderId,
+                            tenantId,
                             locationId: dto.location_id,
                             name: dto.dropoff_name ?? null,
                             phone: dto.dropoff_phone ?? null,
@@ -135,6 +138,7 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
                     await tx.deliveryQuote.upsert({
                         where: { orderId },
                         update: {
+                            tenantId,
                             provider,
                             locationId: dto.location_id,
                             quoteId,
@@ -147,6 +151,7 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
                         },
                         create: {
                             orderId,
+                            tenantId,
                             provider,
                             locationId: dto.location_id,
                             quoteId,
@@ -173,20 +178,20 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
             this.handleError(error, 'quote', 'delivery_quote_failed');
         }
     }
-    async createDeliveryAfterPayment(orderId) {
+    async createDeliveryAfterPayment(tenantId, orderId) {
         try {
-            const payment = await this.prisma.paymentLink.findUnique({ where: { orderId } });
+            const payment = await this.prisma.paymentLink.findFirst({ where: { orderId, tenantId } });
             if (!payment)
                 throw new common_1.NotFoundException('order_not_found');
             if (payment.fulfillment !== 'delivery')
                 return null;
-            const quote = await this.prisma.deliveryQuote.findUnique({ where: { orderId } });
-            const address = await this.prisma.deliveryAddress.findUnique({ where: { orderId } });
+            const quote = await this.prisma.deliveryQuote.findFirst({ where: { orderId, tenantId } });
+            const address = await this.prisma.deliveryAddress.findFirst({ where: { orderId, tenantId } });
             if (!quote || !address)
                 throw new common_1.NotFoundException('delivery_quote_not_found');
             if (quote.provider !== 'uber_direct')
                 return null;
-            const location = await this.prisma.location.findUnique({ where: { id: quote.locationId } });
+            const location = await this.prisma.location.findFirst({ where: { id: quote.locationId, tenantId } });
             if (!location)
                 throw new common_1.NotFoundException('location_not_found');
             const dropoffName = address.name || payment.customerName || 'Customer';
@@ -234,6 +239,7 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
             await this.prisma.deliveryRequest.upsert({
                 where: { orderId },
                 update: {
+                    tenantId,
                     provider: 'uber_direct',
                     deliveryId: deliveryId || null,
                     status,
@@ -242,6 +248,7 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
                 },
                 create: {
                     orderId,
+                    tenantId,
                     provider: 'uber_direct',
                     deliveryId: deliveryId || null,
                     status,
@@ -254,11 +261,12 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
             this.handleError(error, 'createDeliveryAfterPayment', 'delivery_create_failed');
         }
     }
-    async webhook(dto) {
+    async webhook(tenantId, dto) {
         try {
             await this.prisma.deliveryRequest.upsert({
                 where: { orderId: dto.order_id },
                 update: {
+                    tenantId,
                     provider: 'external',
                     deliveryId: dto.delivery_id || null,
                     status: dto.status,
@@ -267,6 +275,7 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
                 },
                 create: {
                     orderId: dto.order_id,
+                    tenantId,
                     provider: 'external',
                     deliveryId: dto.delivery_id || null,
                     status: dto.status,
@@ -279,9 +288,9 @@ let DeliveryService = DeliveryService_1 = class DeliveryService {
             this.handleError(error, 'webhook', 'delivery_webhook_failed');
         }
     }
-    async status(orderId) {
+    async status(tenantId, orderId) {
         try {
-            const row = await this.prisma.deliveryRequest.findUnique({ where: { orderId } });
+            const row = await this.prisma.deliveryRequest.findFirst({ where: { orderId, tenantId } });
             if (!row)
                 throw new common_1.NotFoundException('delivery_not_found');
             return {

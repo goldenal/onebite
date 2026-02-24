@@ -16,25 +16,30 @@ exports.ArrivalsController = void 0;
 const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const kitchen_service_1 = require("./kitchen.service");
+const current_tenant_decorator_1 = require("../../common/tenant/current-tenant.decorator");
+const tenant_required_guard_1 = require("../../common/tenant/tenant-required.guard");
+const auth_guard_1 = require("../auth/auth.guard");
 let ArrivalsController = class ArrivalsController {
     constructor(kitchen) {
         this.kitchen = kitchen;
     }
-    async arrive(orderId) {
-        const updated = await this.kitchen.updateArrival(orderId);
+    async arrive(tenant, orderId) {
+        const updated = await this.kitchen.updateArrival(tenant.id, orderId);
         return { arrival_status: updated?.arrival_status, order_id: orderId };
     }
 };
 exports.ArrivalsController = ArrivalsController;
 __decorate([
     (0, common_1.Post)(':orderId'),
-    __param(0, (0, common_1.Param)('orderId')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('orderId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], ArrivalsController.prototype, "arrive", null);
 exports.ArrivalsController = ArrivalsController = __decorate([
     (0, swagger_1.ApiTags)('arrivals'),
     (0, common_1.Controller)('arrivals'),
+    (0, common_1.UseGuards)(tenant_required_guard_1.TenantRequiredGuard, auth_guard_1.KitchenAccessGuard),
     __metadata("design:paramtypes", [kitchen_service_1.KitchenService])
 ], ArrivalsController);

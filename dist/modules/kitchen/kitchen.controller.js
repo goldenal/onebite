@@ -50,11 +50,13 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const kitchen_service_1 = require("./kitchen.service");
 const auth_guard_1 = require("../auth/auth.guard");
+const current_tenant_decorator_1 = require("../../common/tenant/current-tenant.decorator");
+const tenant_required_guard_1 = require("../../common/tenant/tenant-required.guard");
 let KitchenController = class KitchenController {
     constructor(kitchen) {
         this.kitchen = kitchen;
     }
-    async stream(req, res) {
+    async stream(req, res, tenant) {
         res.set({
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
@@ -62,10 +64,13 @@ let KitchenController = class KitchenController {
         });
         res.flushHeaders();
         res.write('retry: 5000\n\n');
-        const initialOrders = await this.kitchen.listOrders();
+        const initialOrders = await this.kitchen.listOrders(tenant.id);
         res.write(`data: ${JSON.stringify({ type: 'orders.snapshot', orders: initialOrders })}\n\n`);
         const { streamHub } = await Promise.resolve().then(() => __importStar(require('../../common/stream/stream-hub')));
-        const clientId = streamHub.register(res);
+        const clientId = streamHub.register(res, (message) => !message.tenantId || message.tenantId === tenant.id, (message) => {
+            const { tenantId, ...payload } = message;
+            return payload;
+        });
         const interval = setInterval(() => {
             res.write(': keep-alive\n\n');
         }, 15000);
@@ -74,8 +79,8 @@ let KitchenController = class KitchenController {
             streamHub.unregister(clientId);
         });
     }
-    async getOrderStatus(id) {
-        const order = await this.kitchen.getOrder(id);
+    async getOrderStatus(tenant, id) {
+        const order = await this.kitchen.getOrder(tenant.id, id);
         if (!order)
             return null;
         return {
@@ -86,45 +91,45 @@ let KitchenController = class KitchenController {
             channel: order.channel,
         };
     }
-    async list(status, channel, fulfillment) {
-        const orders = await this.kitchen.listOrders({
+    async list(tenant, status, channel, fulfillment) {
+        const orders = await this.kitchen.listOrders(tenant.id, {
             status: status,
             channel: channel,
             fulfillment: fulfillment,
         });
         return { orders };
     }
-    async getOrder(id) {
-        return this.kitchen.getOrder(id);
+    async getOrder(tenant, id) {
+        return this.kitchen.getOrder(tenant.id, id);
     }
-    async start(id) {
-        return this.kitchen.updateStatus(id, 'in_prep');
+    async start(tenant, id) {
+        return this.kitchen.updateStatus(tenant.id, id, 'in_prep');
     }
-    async ready(id) {
-        return this.kitchen.updateStatus(id, 'ready_waiting_arrival');
+    async ready(tenant, id) {
+        return this.kitchen.updateStatus(tenant.id, id, 'ready_waiting_arrival');
     }
-    async serve(id) {
-        return this.kitchen.updateStatus(id, 'served');
+    async serve(tenant, id) {
+        return this.kitchen.updateStatus(tenant.id, id, 'served');
     }
-    async deliver(id) {
-        return this.kitchen.updateStatus(id, 'delivered');
+    async deliver(tenant, id) {
+        return this.kitchen.updateStatus(tenant.id, id, 'delivered');
     }
-    async hold(id) {
-        return this.kitchen.updateStatus(id, 'on_hold');
+    async hold(tenant, id) {
+        return this.kitchen.updateStatus(tenant.id, id, 'on_hold');
     }
-    async resume(id) {
-        return this.kitchen.updateStatus(id, 'in_prep');
+    async resume(tenant, id) {
+        return this.kitchen.updateStatus(tenant.id, id, 'in_prep');
     }
-    async cancel(id) {
-        return this.kitchen.updateStatus(id, 'canceled');
+    async cancel(tenant, id) {
+        return this.kitchen.updateStatus(tenant.id, id, 'canceled');
     }
-    async arrive(id) {
-        return this.kitchen.updateArrival(id);
+    async arrive(tenant, id) {
+        return this.kitchen.updateArrival(tenant.id, id);
     }
-    async refire(id, body) {
-        return this.kitchen.refire(id, body?.items, body?.reason);
+    async refire(tenant, id, body) {
+        return this.kitchen.refire(tenant.id, id, body?.items, body?.reason);
     }
-    async edit(id, body) {
+    async edit(tenant, id, body) {
         const items = Array.isArray(body?.items)
             ? body.items
                 .map((i) => ({
@@ -137,16 +142,16 @@ let KitchenController = class KitchenController {
             }))
                 .filter((i) => i.name)
             : [];
-        return this.kitchen.editItems(id, items, {
+        return this.kitchen.editItems(tenant.id, id, items, {
             priority_flag: body?.priority_flag,
             prep_estimate_minutes: body?.prep_estimate_minutes ?? null,
         });
     }
-    async manual(body) {
-        return this.kitchen.manualCreate(body || {});
+    async manual(tenant, body) {
+        return this.kitchen.manualCreate(tenant.id, body || {});
     }
-    async demo() {
-        return this.kitchen.demoSeed();
+    async demo(tenant) {
+        return this.kitchen.demoSeed(tenant.id);
     }
 };
 exports.KitchenController = KitchenController;
@@ -155,106 +160,121 @@ __decorate([
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
     __param(0, (0, common_1.Req)()),
     __param(1, (0, common_1.Res)()),
+    __param(2, (0, current_tenant_decorator_1.CurrentTenant)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object, Object, Object]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "stream", null);
 __decorate([
     (0, common_1.Get)('orders/:id/status'),
-    __param(0, (0, common_1.Param)('id')),
+    (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "getOrderStatus", null);
 __decorate([
     (0, common_1.Get)('orders'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Query)('status')),
-    __param(1, (0, common_1.Query)('channel')),
-    __param(2, (0, common_1.Query)('fulfillment')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Query)('status')),
+    __param(2, (0, common_1.Query)('channel')),
+    __param(3, (0, common_1.Query)('fulfillment')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, String, String]),
+    __metadata("design:paramtypes", [Object, String, String, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "list", null);
 __decorate([
     (0, common_1.Get)('orders/:id'),
-    __param(0, (0, common_1.Param)('id')),
+    (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "getOrder", null);
 __decorate([
     (0, common_1.Post)('orders/:id/start'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "start", null);
 __decorate([
     (0, common_1.Post)('orders/:id/ready'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "ready", null);
 __decorate([
     (0, common_1.Post)('orders/:id/serve'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "serve", null);
 __decorate([
     (0, common_1.Post)('orders/:id/deliver'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "deliver", null);
 __decorate([
     (0, common_1.Post)('orders/:id/hold'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "hold", null);
 __decorate([
     (0, common_1.Post)('orders/:id/resume'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "resume", null);
 __decorate([
     (0, common_1.Post)('orders/:id/cancel'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "cancel", null);
 __decorate([
     (0, common_1.Post)('orders/:id/arrive'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
-    __param(0, (0, common_1.Param)('id')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "arrive", null);
 __decorate([
     (0, common_1.Post)('orders/:id/refire'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
     (0, swagger_1.ApiBody)({ schema: { example: { items: ['item_1'], reason: 'Overcooked' } } }),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [Object, String, Object]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "refire", null);
 __decorate([
@@ -269,31 +289,35 @@ __decorate([
             },
         },
     }),
-    __param(0, (0, common_1.Param)('id')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:paramtypes", [Object, String, Object]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "edit", null);
 __decorate([
     (0, common_1.Post)('manual'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
     (0, swagger_1.ApiBody)({ schema: { example: { order_id: 'ord_manual_1', items: [{ name: 'Plantains', qty: 2 }] } } }),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "manual", null);
 __decorate([
     (0, common_1.Post)('demo'),
     (0, common_1.UseGuards)(auth_guard_1.KitchenAccessGuard),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], KitchenController.prototype, "demo", null);
 exports.KitchenController = KitchenController = __decorate([
     (0, swagger_1.ApiTags)('kitchen'),
     (0, swagger_1.ApiBearerAuth)('bearer'),
     (0, common_1.Controller)('kitchen'),
+    (0, common_1.UseGuards)(tenant_required_guard_1.TenantRequiredGuard),
     __metadata("design:paramtypes", [kitchen_service_1.KitchenService])
 ], KitchenController);

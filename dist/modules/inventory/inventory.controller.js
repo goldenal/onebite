@@ -19,70 +19,78 @@ const inventory_service_1 = require("./inventory.service");
 const create_inventory_dto_1 = require("./dto/create-inventory.dto");
 const update_inventory_dto_1 = require("./dto/update-inventory.dto");
 const auth_guard_1 = require("../auth/auth.guard");
+const tenant_required_guard_1 = require("../../common/tenant/tenant-required.guard");
+const current_tenant_decorator_1 = require("../../common/tenant/current-tenant.decorator");
 let InventoryController = class InventoryController {
     constructor(inventory) {
         this.inventory = inventory;
     }
-    async list() {
-        return this.inventory.list();
+    async list(tenant) {
+        return this.inventory.list(tenant.id);
     }
-    async get(itemId) {
-        return this.inventory.get(itemId);
+    async get(tenant, itemId) {
+        return this.inventory.get(tenant.id, itemId);
     }
-    async create(body) {
-        return this.inventory.create(body);
+    async create(tenant, body) {
+        return this.inventory.create(tenant.id, body);
     }
-    async update(itemId, body) {
-        return this.inventory.update(itemId, body);
+    async update(tenant, itemId, body) {
+        return this.inventory.update(tenant.id, itemId, body);
     }
-    async remove(itemId) {
-        return this.inventory.remove(itemId);
+    async remove(tenant, itemId) {
+        return this.inventory.remove(tenant.id, itemId);
     }
 };
 exports.InventoryController = InventoryController;
 __decorate([
     (0, common_1.Get)(),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", []),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "list", null);
 __decorate([
     (0, common_1.Get)(':itemId'),
-    __param(0, (0, common_1.Param)('itemId')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('itemId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "get", null);
 __decorate([
     (0, common_1.Post)(),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_inventory_dto_1.CreateInventoryDto]),
+    __metadata("design:paramtypes", [Object, create_inventory_dto_1.CreateInventoryDto]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "create", null);
 __decorate([
     (0, common_1.Put)(':itemId'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('itemId')),
-    __param(1, (0, common_1.Body)()),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('itemId')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String, update_inventory_dto_1.UpdateInventoryDto]),
+    __metadata("design:paramtypes", [Object, String, update_inventory_dto_1.UpdateInventoryDto]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "update", null);
 __decorate([
     (0, common_1.Delete)(':itemId'),
     (0, common_1.UseGuards)(auth_guard_1.AuthGuard, (0, auth_guard_1.AdminGuard)()),
     (0, swagger_1.ApiBearerAuth)('bearer'),
-    __param(0, (0, common_1.Param)('itemId')),
+    __param(0, (0, current_tenant_decorator_1.CurrentTenant)()),
+    __param(1, (0, common_1.Param)('itemId')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object, String]),
     __metadata("design:returntype", Promise)
 ], InventoryController.prototype, "remove", null);
 exports.InventoryController = InventoryController = __decorate([
     (0, swagger_1.ApiTags)('inventory'),
     (0, common_1.Controller)('inventory'),
+    (0, common_1.UseGuards)(tenant_required_guard_1.TenantRequiredGuard),
     __metadata("design:paramtypes", [inventory_service_1.InventoryService])
 ], InventoryController);

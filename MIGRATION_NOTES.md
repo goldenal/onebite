@@ -8,6 +8,7 @@
 3. `prisma/migrations/20260220130200_003_backfill_default_tenant/migration.sql`
 4. `prisma/migrations/20260220130300_004_add_indexes_and_fk_constraints/migration.sql`
 5. `prisma/migrations/20260220130400_005_not_null_tenant_columns_safe_subset/migration.sql`
+6. `prisma/migrations/20260220130500_006_tenantize_payments_delivery_runtime/migration.sql`
 
 ### New SaaS core tables (additive)
 - `tenants`
@@ -26,7 +27,8 @@
 - Added `tenant_id` to:
   - `orders`, `order_items`, `audit`, `menu_items`, `inventory`, `reservations`,
     `customer_reviews`, `review_replies`, `promotions`, `group_orders`, `group_order_items`,
-    `tablet_sessions`, `legacy_orders`, `processed_events`, `review_access_tokens`, `staff_users`, `locations`
+    `tablet_sessions`, `legacy_orders`, `processed_events`, `review_access_tokens`, `staff_users`, `locations`,
+    `payment_links`, `delivery_addresses`, `delivery_quotes`, `delivery_requests`
 - Added `location_id` to:
   - `orders`, `order_items`, `reservations`, `tablet_sessions`, `inventory`, `menu_items`, `staff_users`
 
@@ -39,6 +41,8 @@
 - Placeholder `tenant_stripe_accounts` row seeded for legacy tenant
 - Added tenant/location FKs and SaaS indexes
 - Added DB defaults for `tenant_id='tenant_legacy_default'` to keep legacy writes compatible
+- Added checkout fee breakdown persistence columns on `payment_links`:
+  - `subtotal_cents`, `tax_cents`, `delivery_fee_cents`, `application_fee_cents`, `connected_account_id`
 - Set `tenant_id NOT NULL` on safe subset:
   - `orders`, `order_items`, `menu_items`, `inventory`, `reservations`, `customer_reviews`,
     `review_replies`, `promotions`, `group_orders`, `group_order_items`, `tablet_sessions`,

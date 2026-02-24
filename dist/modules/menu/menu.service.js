@@ -17,21 +17,23 @@ let MenuService = class MenuService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async listMenu() {
+    async listMenu(tenantId) {
         const rows = await this.prisma.menuItem.findMany({
+            where: { tenantId },
             orderBy: [{ category: 'asc' }, { name: 'asc' }],
         });
         return rows.map(this.toResponse);
     }
-    async getMenuItem(id) {
-        const item = await this.prisma.menuItem.findUnique({ where: { id } });
+    async getMenuItem(tenantId, id) {
+        const item = await this.prisma.menuItem.findFirst({ where: { id, tenantId } });
         return item ? this.toResponse(item) : null;
     }
-    async createMenuItem(dto) {
+    async createMenuItem(tenantId, dto) {
         const id = (0, crypto_1.randomUUID)();
         const item = await this.prisma.menuItem.create({
             data: {
                 id,
+                tenantId,
                 name: dto.name,
                 description: dto.description ?? '',
                 price: dto.price,
@@ -47,8 +49,8 @@ let MenuService = class MenuService {
         });
         return this.toResponse(item);
     }
-    async updateMenuItem(id, dto) {
-        const existing = await this.prisma.menuItem.findUnique({ where: { id } });
+    async updateMenuItem(tenantId, id, dto) {
+        const existing = await this.prisma.menuItem.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Item not found');
         const updateData = {};
@@ -74,18 +76,20 @@ let MenuService = class MenuService {
             updateData.includes = dto.includes;
         if (dto.notes !== undefined)
             updateData.notes = dto.notes;
-        const item = await this.prisma.menuItem.update({
-            where: { id },
-            data: updateData,
-        });
+        const updated = await this.prisma.menuItem.updateMany({ where: { id, tenantId }, data: updateData });
+        if (!updated.count)
+            throw new common_1.NotFoundException('Item not found');
+        const item = await this.prisma.menuItem.findFirst({ where: { id, tenantId } });
+        if (!item)
+            throw new common_1.NotFoundException('Item not found');
         return this.toResponse(item);
     }
-    async deleteMenuItem(id) {
-        const existing = await this.prisma.menuItem.findUnique({ where: { id } });
+    async deleteMenuItem(tenantId, id) {
+        const existing = await this.prisma.menuItem.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Item not found');
-        await this.prisma.menuItem.delete({ where: { id } });
-        await this.prisma.inventoryItem.deleteMany({ where: { itemId: id } });
+        await this.prisma.menuItem.deleteMany({ where: { id, tenantId } });
+        await this.prisma.inventoryItem.deleteMany({ where: { itemId: id, tenantId } });
         return { message: 'Item deleted successfully' };
     }
     toResponse(item) {

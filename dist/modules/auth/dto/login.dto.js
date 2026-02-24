@@ -16,13 +16,24 @@ class LoginDto {
 }
 exports.LoginDto = LoginDto;
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: 'admin' }),
+    (0, swagger_1.ApiProperty)({
+        example: 'tenant_bitter',
+        description: 'Optional tenant ID for disambiguation when this credential belongs to multiple restaurants.',
+        required: false,
+    }),
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(1),
+    __metadata("design:type", String)
+], LoginDto.prototype, "tenantId", void 0);
+__decorate([
+    (0, swagger_1.ApiProperty)({ example: 'owner@restaurant.com', description: 'Email or legacy username.' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.MinLength)(1),
     __metadata("design:type", String)
 ], LoginDto.prototype, "username", void 0);
 __decorate([
-    (0, swagger_1.ApiProperty)({ example: 'adminadmin' }),
+    (0, swagger_1.ApiProperty)({ example: 'StrongPassword123!' }),
     (0, class_validator_1.IsString)(),
     (0, class_validator_1.MinLength)(1),
     __metadata("design:type", String)

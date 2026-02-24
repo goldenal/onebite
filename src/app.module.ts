@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import { ConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -6,7 +6,6 @@ import { HealthModule } from './modules/health/health.module';
 import { MenuModule } from './modules/menu/menu.module';
 import { SettingsModule } from './modules/settings/settings.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { StaffModule } from './modules/staff/staff.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { ReservationsModule } from './modules/reservations/reservations.module';
 import { PromotionsModule } from './modules/promotions/promotions.module';
@@ -24,6 +23,11 @@ import { VoiceModule } from './modules/voice/voice.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { LogBodyInterceptor } from './common/interceptors/log-body.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { TenantModule } from './common/tenant/tenant.module';
+import { TenantMiddleware } from './common/tenant/tenant.middleware';
+import { PublicModule } from './modules/public/public.module';
+import { CustomersModule } from './modules/customers/customers.module';
+import { PlatformModule } from './modules/platform/platform.module';
 
 const prettyTarget = (() => {
   try {
@@ -38,6 +42,7 @@ const prettyTarget = (() => {
   imports: [
     ConfigModule,
     PrismaModule,
+    TenantModule,
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'info'),
@@ -72,7 +77,6 @@ const prettyTarget = (() => {
     MenuModule,
     SettingsModule,
     AuthModule,
-    StaffModule,
     InventoryModule,
     ReservationsModule,
     PromotionsModule,
@@ -88,6 +92,9 @@ const prettyTarget = (() => {
     TabletModule,
     ChatModule,
     VoiceModule,
+    PublicModule,
+    CustomersModule,
+    PlatformModule,
   ],
   providers: [
     {
@@ -96,5 +103,8 @@ const prettyTarget = (() => {
     },
   ],
 })
-export class AppModule {}
-// 
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantMiddleware).forRoutes('*');
+  }
+}

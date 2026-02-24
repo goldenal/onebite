@@ -17,8 +17,9 @@ let ReservationsService = class ReservationsService {
     constructor(prisma) {
         this.prisma = prisma;
     }
-    async list() {
+    async list(tenantId) {
         const rows = await this.prisma.reservation.findMany({
+            where: { tenantId },
             orderBy: [{ date: 'desc' }, { time: 'desc' }],
         });
         return rows.map((r) => ({
@@ -35,8 +36,8 @@ let ReservationsService = class ReservationsService {
             createdAt: Number(r.createdAt),
         }));
     }
-    async get(id) {
-        const r = await this.prisma.reservation.findUnique({ where: { id } });
+    async get(tenantId, id) {
+        const r = await this.prisma.reservation.findFirst({ where: { id, tenantId } });
         if (!r)
             throw new common_1.NotFoundException('Reservation not found');
         return {
@@ -53,12 +54,15 @@ let ReservationsService = class ReservationsService {
             createdAt: Number(r.createdAt),
         };
     }
-    async create(dto) {
+    async create(tenantId, dto) {
         const id = (0, crypto_1.randomUUID)();
         const createdAt = BigInt(Date.now());
+        const location = await this.prisma.location.findFirst({ where: { tenantId }, orderBy: { createdAt: 'asc' } });
         await this.prisma.reservation.create({
             data: {
                 id,
+                tenantId,
+                locationId: location?.id ?? null,
                 name: dto.name,
                 email: dto.email,
                 phone: dto.phone,
@@ -72,18 +76,23 @@ let ReservationsService = class ReservationsService {
         });
         return { id, ...dto, status: 'pending', createdAt: Number(createdAt) };
     }
-    async update(id, dto) {
-        const existing = await this.prisma.reservation.findUnique({ where: { id } });
+    async update(tenantId, id, dto) {
+        const existing = await this.prisma.reservation.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Reservation not found');
-        const updated = await this.prisma.reservation.update({
-            where: { id },
+        const updatedRows = await this.prisma.reservation.updateMany({
+            where: { id, tenantId },
             data: {
                 status: dto.status ?? existing.status,
                 notes: dto.notes ?? existing.notes,
                 specialRequests: dto.specialRequests ?? existing.specialRequests,
             },
         });
+        if (!updatedRows.count)
+            throw new common_1.NotFoundException('Reservation not found');
+        const updated = await this.prisma.reservation.findFirst({ where: { id, tenantId } });
+        if (!updated)
+            throw new common_1.NotFoundException('Reservation not found');
         return {
             id: updated.id,
             name: updated.name,
@@ -98,11 +107,11 @@ let ReservationsService = class ReservationsService {
             createdAt: Number(updated.createdAt),
         };
     }
-    async remove(id) {
-        const existing = await this.prisma.reservation.findUnique({ where: { id } });
+    async remove(tenantId, id) {
+        const existing = await this.prisma.reservation.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Reservation not found');
-        await this.prisma.reservation.delete({ where: { id } });
+        await this.prisma.reservation.deleteMany({ where: { id, tenantId } });
         return { message: 'Reservation deleted successfully' };
     }
 };

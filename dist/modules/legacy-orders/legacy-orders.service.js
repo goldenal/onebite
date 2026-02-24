@@ -22,8 +22,8 @@ let LegacyOrdersService = class LegacyOrdersService {
     allowLegacyOrders() {
         return this.config.get('ALLOW_LEGACY_ORDERS') === 'true';
     }
-    async list() {
-        const rows = await this.prisma.legacyOrder.findMany({ orderBy: { timestamp: 'desc' } });
+    async list(tenantId) {
+        const rows = await this.prisma.legacyOrder.findMany({ where: { tenantId }, orderBy: { timestamp: 'desc' } });
         return rows.map((o) => ({
             id: o.id,
             items: o.items ?? [],
@@ -35,8 +35,8 @@ let LegacyOrdersService = class LegacyOrdersService {
             timestamp: o.timestamp ? Number(o.timestamp) : null,
         }));
     }
-    async get(id) {
-        const order = await this.prisma.legacyOrder.findUnique({ where: { id } });
+    async get(tenantId, id) {
+        const order = await this.prisma.legacyOrder.findFirst({ where: { id, tenantId } });
         if (!order)
             throw new common_1.NotFoundException('Order not found');
         return {
@@ -50,7 +50,7 @@ let LegacyOrdersService = class LegacyOrdersService {
             timestamp: order.timestamp ? Number(order.timestamp) : null,
         };
     }
-    async create(dto) {
+    async create(tenantId, dto) {
         if (!this.allowLegacyOrders()) {
             throw new common_1.ForbiddenException('Legacy order creation disabled. Use Stripe payment flow.');
         }
@@ -60,6 +60,7 @@ let LegacyOrdersService = class LegacyOrdersService {
         await this.prisma.legacyOrder.create({
             data: {
                 id,
+                tenantId,
                 items: dto.items ?? [],
                 total: dto.total,
                 status: 'pending',
@@ -80,18 +81,23 @@ let LegacyOrdersService = class LegacyOrdersService {
             timestamp,
         };
     }
-    async update(id, dto) {
-        const existing = await this.prisma.legacyOrder.findUnique({ where: { id } });
+    async update(tenantId, id, dto) {
+        const existing = await this.prisma.legacyOrder.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Order not found');
-        const updated = await this.prisma.legacyOrder.update({
-            where: { id },
+        const updatedRows = await this.prisma.legacyOrder.updateMany({
+            where: { id, tenantId },
             data: {
                 status: dto.status ?? existing.status,
                 customerName: dto.customerName ?? existing.customerName,
                 customerPhone: dto.customerPhone ?? existing.customerPhone,
             },
         });
+        if (!updatedRows.count)
+            throw new common_1.NotFoundException('Order not found');
+        const updated = await this.prisma.legacyOrder.findFirst({ where: { id, tenantId } });
+        if (!updated)
+            throw new common_1.NotFoundException('Order not found');
         return {
             id: updated.id,
             items: updated.items ?? [],
@@ -103,11 +109,11 @@ let LegacyOrdersService = class LegacyOrdersService {
             timestamp: updated.timestamp ? Number(updated.timestamp) : null,
         };
     }
-    async remove(id) {
-        const existing = await this.prisma.legacyOrder.findUnique({ where: { id } });
+    async remove(tenantId, id) {
+        const existing = await this.prisma.legacyOrder.findFirst({ where: { id, tenantId } });
         if (!existing)
             throw new common_1.NotFoundException('Order not found');
-        await this.prisma.legacyOrder.delete({ where: { id } });
+        await this.prisma.legacyOrder.deleteMany({ where: { id, tenantId } });
         return { message: 'Order deleted successfully' };
     }
 };

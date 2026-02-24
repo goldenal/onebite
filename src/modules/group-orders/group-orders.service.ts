@@ -17,8 +17,8 @@ export class GroupOrdersService {
     return code;
   }
 
-  async listAdmin() {
-    const rows = await this.prisma.groupOrder.findMany({ orderBy: { createdAt: 'desc' } });
+  async listAdmin(tenantId: string) {
+    const rows = await this.prisma.groupOrder.findMany({ where: { tenantId }, orderBy: { createdAt: 'desc' } });
     return rows.map((o) => ({
       id: o.id,
       initiatorName: o.initiatorName,
@@ -28,12 +28,12 @@ export class GroupOrdersService {
     }));
   }
 
-  async get(id: string) {
-    const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+  async get(tenantId: string, id: string) {
+    const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
     if (!order) throw new NotFoundException('Group order not found');
 
     const items = await this.prisma.groupOrderItem.findMany({
-      where: { groupOrderId: id },
+      where: { groupOrderId: id, tenantId },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -70,7 +70,7 @@ export class GroupOrdersService {
     };
   }
 
-  async create(dto: CreateGroupOrderDto) {
+  async create(tenantId: string, dto: CreateGroupOrderDto) {
     const id = this.generateGroupCode();
     const createdAt = BigInt(Date.now());
     const expiresAt = createdAt + BigInt(24 * 60 * 60 * 1000);
@@ -78,6 +78,7 @@ export class GroupOrdersService {
     await this.prisma.groupOrder.create({
       data: {
         id,
+        tenantId,
         initiatorName: dto.initiatorName.trim(),
         status: 'active',
         createdAt,
@@ -95,12 +96,12 @@ export class GroupOrdersService {
     };
   }
 
-  async addItem(id: string, dto: AddGroupItemDto) {
-    const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+  async addItem(tenantId: string, id: string, dto: AddGroupItemDto) {
+    const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
     if (!order) throw new NotFoundException('Group order not found');
     if (order.status !== 'active') throw new NotFoundException('Group order is no longer active');
     if (order.expiresAt && Date.now() > Number(order.expiresAt)) {
-      await this.prisma.groupOrder.update({ where: { id }, data: { status: 'expired' } });
+      await this.prisma.groupOrder.updateMany({ where: { id, tenantId }, data: { status: 'expired' } });
       throw new NotFoundException('Group order has expired');
     }
 
@@ -111,6 +112,7 @@ export class GroupOrdersService {
     await this.prisma.groupOrderItem.create({
       data: {
         id: itemId,
+        tenantId,
         groupOrderId: id,
         participantName: dto.participantName.trim(),
         menuItemId: dto.menuItem.id,
@@ -141,24 +143,27 @@ export class GroupOrdersService {
     };
   }
 
-  async removeItem(id: string, itemId: string) {
-    const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+  async removeItem(tenantId: string, id: string, itemId: string) {
+    const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
     if (!order) throw new NotFoundException('Group order not found');
     if (order.status !== 'active') throw new NotFoundException('Group order is no longer active');
 
-    const deleted = await this.prisma.groupOrderItem.deleteMany({ where: { id: itemId, groupOrderId: id } });
+    const deleted = await this.prisma.groupOrderItem.deleteMany({ where: { id: itemId, groupOrderId: id, tenantId } });
     if (deleted.count === 0) throw new NotFoundException('Item not found in group order');
     return { message: 'Item removed from group order' };
   }
 
-  async updateStatus(id: string, dto: UpdateGroupStatusDto) {
-    const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+  async updateStatus(tenantId: string, id: string, dto: UpdateGroupStatusDto) {
+    const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
     if (!order) throw new NotFoundException('Group order not found');
 
-    const updated = await this.prisma.groupOrder.update({
-      where: { id },
+    const updatedRows = await this.prisma.groupOrder.updateMany({
+      where: { id, tenantId },
       data: { status: dto.status },
     });
+    if (!updatedRows.count) throw new NotFoundException('Group order not found');
+    const updated = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
+    if (!updated) throw new NotFoundException('Group order not found');
 
     return {
       id: updated.id,
@@ -169,12 +174,12 @@ export class GroupOrdersService {
     };
   }
 
-  async participantItems(id: string, participantName: string) {
-    const order = await this.prisma.groupOrder.findUnique({ where: { id } });
+  async participantItems(tenantId: string, id: string, participantName: string) {
+    const order = await this.prisma.groupOrder.findFirst({ where: { id, tenantId } });
     if (!order) throw new NotFoundException('Group order not found');
 
     const items = await this.prisma.groupOrderItem.findMany({
-      where: { groupOrderId: id, participantName },
+      where: { groupOrderId: id, participantName, tenantId },
       orderBy: { createdAt: 'desc' },
     });
 
