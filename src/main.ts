@@ -5,6 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { enrichSwaggerDocument } from './common/swagger/swagger-docs';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true, logger: ['error', 'warn', 'log'] });
@@ -28,7 +29,7 @@ async function bootstrap() {
   );
   app.useGlobalFilters(new HttpExceptionFilter());
 
-  app.setGlobalPrefix('api', { exclude: ['healthz', 'readyz', 'webhooks/stripe', 'webhooks/delivery'] });
+  app.setGlobalPrefix('api', { exclude: ['healthz', 'readyz', 'webhooks/stripe', 'webhooks/stripe-connect', 'webhooks/delivery'] });
 
   const config = new DocumentBuilder()
     .setTitle('Bite Creole API')
@@ -43,7 +44,7 @@ async function bootstrap() {
       'bearer',
     )
     .build();
-  const document = SwaggerModule.createDocument(app, config);
+  const document = enrichSwaggerDocument(SwaggerModule.createDocument(app, config));
   SwaggerModule.setup('docs', app, document);
 
   const port = process.env.PORT ? Number(process.env.PORT) : 3002;

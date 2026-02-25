@@ -8,10 +8,10 @@ import type { Order, OrderItem, Status } from './kitchen.types';
 export class KitchenService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async broadcastOrdersSnapshot() {
+  async broadcastOrdersSnapshot(tenantId: string) {
     try {
-      const orders = await this.listOrders();
-      streamHub.broadcast({ type: 'orders.snapshot', orders });
+      const orders = await this.listOrders(tenantId);
+      streamHub.broadcast({ type: 'orders.snapshot', tenantId, orders });
     } catch {
       // Snapshot broadcast should never break order workflows.
     }
@@ -21,9 +21,10 @@ export class KitchenService {
     return String(randomInt(1000, 9999));
   }
 
-  async listOrders(filter: Partial<Pick<Order, 'status' | 'channel' | 'fulfillment'>> = {}) {
+  async listOrders(tenantId: string, filter: Partial<Pick<Order, 'status' | 'channel' | 'fulfillment'>> = {}) {
     const orders = await this.prisma.order.findMany({
       where: {
+        tenantId,
         status: filter.status,
         channel: filter.channel,
         fulfillment: filter.fulfillment,
@@ -33,7 +34,7 @@ export class KitchenService {
 
     const ids = orders.map((o) => o.id);
     const items = ids.length
-      ? await this.prisma.orderItem.findMany({ where: { orderId: { in: ids } } })
+      ? await this.prisma.orderItem.findMany({ where: { orderId: { in: ids }, tenantId } })
       : [];
     const byOrder = new Map<string, OrderItem[]>();
     items.forEach((i) => {
@@ -53,10 +54,10 @@ export class KitchenService {
     return orders.map((o) => this.decorateTiming(this.toOrder(o, byOrder.get(o.id) || [])));
   }
 
-  async getOrder(id: string) {
-    const order = await this.prisma.order.findUnique({ where: { id } });
+  async getOrder(tenantId: string, id: string) {
+    const order = await this.prisma.order.findFirst({ where: { id, tenantId } });
     if (!order) return null;
-    const items = await this.prisma.orderItem.findMany({ where: { orderId: id } });
+    const items = await this.prisma.orderItem.findMany({ where: { orderId: id, tenantId } });
     return this.toOrder(order, items.map((i) => ({
       name: i.name || '',
       qty: i.qty || 0,
@@ -67,8 +68,8 @@ export class KitchenService {
     })));
   }
 
-  async updateStatus(id: string, requested: Status) {
-    const order = await this.getOrder(id);
+  async updateStatus(tenantId: string, id: string, requested: Status) {
+    const order = await this.getOrder(tenantId, id);
     if (!order) throw new NotFoundException('not_found');
 
     const target = this.computeNextStatus(order.status, requested, order.fulfillment, order.arrival_status);
@@ -90,84 +91,84 @@ export class KitchenService {
     if (target === 'served') data.servedAt = new Date(ts);
     if (target === 'delivered') data.deliveredAt = new Date(ts);
 
-    await this.prisma.order.update({ where: { id }, data });
-    await this.appendAudit(id, 'kitchen', target);
+    await this.prisma.order.updateMany({ where: { id, tenantId }, data });
+    await this.appendAudit(tenantId, id, 'kitchen', target);
 
-    const updated = await this.getOrder(id);
+    const updated = await this.getOrder(tenantId, id);
     if (updated) {
-      streamHub.broadcast({ type: 'order.updated', order: updated });
-      void this.broadcastOrdersSnapshot();
+      streamHub.broadcast({ type: 'order.updated', tenantId, order: updated });
+      void this.broadcastOrdersSnapshot(tenantId);
     }
     return updated;
   }
 
-  async updateArrival(id: string) {
-    const order = await this.getOrder(id);
+  async updateArrival(tenantId: string, id: string) {
+    const order = await this.getOrder(tenantId, id);
     if (!order) throw new NotFoundException('not_found');
     if (order.arrival_status !== 'waiting') throw new NotFoundException('conflict');
 
-    await this.prisma.order.update({
-      where: { id },
+    await this.prisma.order.updateMany({
+      where: { id, tenantId },
       data: {
         arrivalStatus: 'arrived',
         status: order.status === 'ready_waiting_arrival' ? 'ready_for_handoff' : order.status,
       },
     });
-    await this.appendAudit(id, 'customer', 'arrival');
+    await this.appendAudit(tenantId, id, 'customer', 'arrival');
 
-    const updated = await this.getOrder(id);
+    const updated = await this.getOrder(tenantId, id);
     if (updated) {
-      streamHub.broadcast({ type: 'order.arrival', order_id: updated.id, arrival_status: 'arrived' });
-      streamHub.broadcast({ type: 'order.updated', order: updated });
-      void this.broadcastOrdersSnapshot();
+      streamHub.broadcast({ type: 'order.arrival', tenantId, order_id: updated.id, arrival_status: 'arrived' });
+      streamHub.broadcast({ type: 'order.updated', tenantId, order: updated });
+      void this.broadcastOrdersSnapshot(tenantId);
     }
     return updated;
   }
 
-  async updateDelivery(orderId: string, event: string, driver_status?: any) {
-    const order = await this.getOrder(orderId);
+  async updateDelivery(tenantId: string, orderId: string, event: string, driver_status?: any) {
+    const order = await this.getOrder(tenantId, orderId);
     if (!order) throw new NotFoundException('not_found');
 
     if (event === 'picked_up') {
-      await this.prisma.order.update({ where: { id: orderId }, data: { status: 'out_for_delivery' } });
+      await this.prisma.order.updateMany({ where: { id: orderId, tenantId }, data: { status: 'out_for_delivery' } });
     } else if (event === 'delivered') {
-      await this.prisma.order.update({ where: { id: orderId }, data: { status: 'delivered', deliveredAt: new Date() } });
+      await this.prisma.order.updateMany({ where: { id: orderId, tenantId }, data: { status: 'delivered', deliveredAt: new Date() } });
     } else if (event === 'canceled') {
-      await this.prisma.order.update({ where: { id: orderId }, data: { status: 'canceled' } });
+      await this.prisma.order.updateMany({ where: { id: orderId, tenantId }, data: { status: 'canceled' } });
     }
-    await this.appendAudit(orderId, 'delivery', event);
-    streamHub.broadcast({ type: 'order.delivery_update', order_id: orderId, driver_status });
+    await this.appendAudit(tenantId, orderId, 'delivery', event);
+    streamHub.broadcast({ type: 'order.delivery_update', tenantId, order_id: orderId, driver_status });
 
-    const updated = await this.getOrder(orderId);
+    const updated = await this.getOrder(tenantId, orderId);
     if (updated) {
-      streamHub.broadcast({ type: 'order.updated', order: updated });
-      void this.broadcastOrdersSnapshot();
+      streamHub.broadcast({ type: 'order.updated', tenantId, order: updated });
+      void this.broadcastOrdersSnapshot(tenantId);
     }
     return updated;
   }
 
-  async refire(id: string, items?: string[], reason?: string) {
-    await this.appendAudit(id, 'kitchen', 'refire', { items, reason });
-    streamHub.broadcast({ type: 'order.refire', order_id: id, items });
+  async refire(tenantId: string, id: string, items?: string[], reason?: string) {
+    await this.appendAudit(tenantId, id, 'kitchen', 'refire', { items, reason });
+    streamHub.broadcast({ type: 'order.refire', tenantId, order_id: id, items });
     return { ok: true };
   }
 
-  async generatePickup(orderId: string) {
-    const order = await this.getOrder(orderId);
+  async generatePickup(tenantId: string, orderId: string) {
+    const order = await this.getOrder(tenantId, orderId);
     if (!order) throw new NotFoundException('not_found');
     if (order.fulfillment !== 'pickup') throw new NotFoundException('conflict');
     const code = this.generatePickupCode();
-    await this.prisma.order.update({ where: { id: orderId }, data: { pickupCode: code } });
-    await this.appendAudit(orderId, 'system', 'pickup_code_generated', { pickupCode: code });
-    const updated = await this.getOrder(orderId);
+    await this.prisma.order.updateMany({ where: { id: orderId, tenantId }, data: { pickupCode: code } });
+    await this.appendAudit(tenantId, orderId, 'system', 'pickup_code_generated', { pickupCode: code });
+    const updated = await this.getOrder(tenantId, orderId);
     if (updated) {
-      streamHub.broadcast({ type: 'order.updated', order: updated });
-      void this.broadcastOrdersSnapshot();
+      streamHub.broadcast({ type: 'order.updated', tenantId, order: updated });
+      void this.broadcastOrdersSnapshot(tenantId);
     }
     return { pickup_code: code, order_id: orderId };
   }
 
-  async manualCreate(body: any) {
+  async manualCreate(tenantId: string, body: any) {
     const now = new Date().toISOString();
     const id = this.normalizeOrderId(body.id);
     const channel = (body.channel || 'phone') as Order['channel'];
@@ -206,23 +207,29 @@ export class KitchenService {
       priority_flag: !!body.priority_flag,
     };
 
-    await this.upsertOrderWithItems(order);
-    streamHub.broadcast({ type: 'order.created', order });
-    void this.broadcastOrdersSnapshot();
+    await this.upsertOrderWithItems(tenantId, order);
+    streamHub.broadcast({ type: 'order.created', tenantId, order });
+    void this.broadcastOrdersSnapshot(tenantId);
     return { ok: true, order };
   }
 
-  async editItems(id: string, items: OrderItem[], opts: { priority_flag?: boolean; prep_estimate_minutes?: number | null }) {
-    const order = await this.getOrder(id);
+  async editItems(
+    tenantId: string,
+    id: string,
+    items: OrderItem[],
+    opts: { priority_flag?: boolean; prep_estimate_minutes?: number | null },
+  ) {
+    const order = await this.getOrder(tenantId, id);
     if (!order) throw new NotFoundException('not_found');
     if (['served', 'delivered'].includes(order.status)) throw new NotFoundException('conflict');
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.orderItem.deleteMany({ where: { orderId: id } });
+      await tx.orderItem.deleteMany({ where: { orderId: id, tenantId } });
       if (items.length) {
         await tx.orderItem.createMany({
           data: items.map((item) => ({
             orderId: id,
+            tenantId,
             name: item.name,
             qty: item.qty,
             modifiers: item.modifiers ?? [],
@@ -233,8 +240,8 @@ export class KitchenService {
         });
       }
       if (opts.priority_flag !== undefined || opts.prep_estimate_minutes !== undefined) {
-        await tx.order.update({
-          where: { id },
+        await tx.order.updateMany({
+          where: { id, tenantId },
           data: {
             priorityFlag: opts.priority_flag ?? undefined,
             prepEstimateMinutes: opts.prep_estimate_minutes ?? undefined,
@@ -244,6 +251,7 @@ export class KitchenService {
       await tx.auditEntry.create({
         data: {
           orderId: id,
+          tenantId,
           ts: new Date(),
           actor: 'kitchen',
           action: 'edit_items',
@@ -252,15 +260,15 @@ export class KitchenService {
       });
     });
 
-    const updated = await this.getOrder(id);
+    const updated = await this.getOrder(tenantId, id);
     if (updated) {
-      streamHub.broadcast({ type: 'order.updated', order: updated });
-      void this.broadcastOrdersSnapshot();
+      streamHub.broadcast({ type: 'order.updated', tenantId, order: updated });
+      void this.broadcastOrdersSnapshot(tenantId);
     }
     return updated;
   }
 
-  async demoSeed() {
+  async demoSeed(tenantId: string) {
     const now = new Date().toISOString();
     const demoOrders: Order[] = [
       {
@@ -322,31 +330,34 @@ export class KitchenService {
 
     await this.prisma.$transaction(async (tx) => {
       for (const order of demoOrders) {
-        await this.upsertOrderWithItemsTx(tx, order);
+        await this.upsertOrderWithItemsTx(tx, tenantId, order);
       }
     });
 
-    demoOrders.forEach((o) => streamHub.broadcast({ type: 'order.created', order: o }));
-    void this.broadcastOrdersSnapshot();
+    demoOrders.forEach((o) => streamHub.broadcast({ type: 'order.created', tenantId, order: o }));
+    void this.broadcastOrdersSnapshot(tenantId);
     return { ok: true, seeded: demoOrders.length };
   }
 
-  async appendAudit(orderId: string, actor: string, action: string, details?: any) {
+  async appendAudit(tenantId: string, orderId: string, actor: string, action: string, details?: any) {
     await this.prisma.auditEntry.create({
-      data: { orderId, ts: new Date(), actor, action, details: details ?? {} },
+      data: { orderId, tenantId, ts: new Date(), actor, action, details: details ?? {} },
     });
   }
 
-  async upsertOrderWithItems(order: Order) {
+  async upsertOrderWithItems(tenantId: string, order: Order) {
     await this.prisma.$transaction(async (tx) => {
-      await this.upsertOrderWithItemsTx(tx, order);
+      await this.upsertOrderWithItemsTx(tx, tenantId, order);
     });
   }
 
-  async upsertOrderWithItemsTx(tx: any, order: Order) {
+  async upsertOrderWithItemsTx(tx: any, tenantId: string, order: Order) {
+    const defaultLocation = await tx.location.findFirst({ where: { tenantId }, orderBy: { createdAt: 'asc' } });
     await tx.order.upsert({
       where: { id: order.id },
       update: {
+        tenantId,
+        locationId: defaultLocation?.id ?? null,
         channel: order.channel,
         fulfillment: order.fulfillment,
         sourceLabel: order.source_label,
@@ -364,6 +375,8 @@ export class KitchenService {
       },
       create: {
         id: order.id,
+        tenantId,
+        locationId: defaultLocation?.id ?? null,
         channel: order.channel,
         fulfillment: order.fulfillment,
         sourceLabel: order.source_label,
@@ -381,11 +394,13 @@ export class KitchenService {
       },
     });
 
-    await tx.orderItem.deleteMany({ where: { orderId: order.id } });
+    await tx.orderItem.deleteMany({ where: { orderId: order.id, tenantId } });
     if (order.items.length) {
       await tx.orderItem.createMany({
         data: order.items.map((item) => ({
           orderId: order.id,
+          tenantId,
+          locationId: defaultLocation?.id ?? null,
           name: item.name,
           qty: item.qty,
           modifiers: item.modifiers ?? [],
@@ -401,6 +416,7 @@ export class KitchenService {
       await tx.auditEntry.createMany({
         data: audits.map((audit) => ({
           orderId: order.id,
+          tenantId,
           ts: new Date(audit.ts),
           actor: audit.actor,
           action: audit.action,

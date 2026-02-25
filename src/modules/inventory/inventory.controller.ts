@@ -4,40 +4,44 @@ import { InventoryService } from './inventory.service';
 import { CreateInventoryDto } from './dto/create-inventory.dto';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
 import { AuthGuard, AdminGuard } from '../auth/auth.guard';
+import { TenantRequiredGuard } from '../../common/tenant/tenant-required.guard';
+import { CurrentTenant } from '../../common/tenant/current-tenant.decorator';
+import type { TenantContext } from '../../common/tenant/tenant.types';
 
 @ApiTags('inventory')
 @Controller('inventory')
+@UseGuards(TenantRequiredGuard)
 export class InventoryController {
   constructor(private readonly inventory: InventoryService) {}
 
   @Get()
-  async list() {
-    return this.inventory.list();
+  async list(@CurrentTenant() tenant: TenantContext) {
+    return this.inventory.list(tenant.id);
   }
 
   @Get(':itemId')
-  async get(@Param('itemId') itemId: string) {
-    return this.inventory.get(itemId);
+  async get(@CurrentTenant() tenant: TenantContext, @Param('itemId') itemId: string) {
+    return this.inventory.get(tenant.id, itemId);
   }
 
   @Post()
   @UseGuards(AuthGuard, AdminGuard())
   @ApiBearerAuth('bearer')
-  async create(@Body() body: CreateInventoryDto) {
-    return this.inventory.create(body);
+  async create(@CurrentTenant() tenant: TenantContext, @Body() body: CreateInventoryDto) {
+    return this.inventory.create(tenant.id, body);
   }
 
   @Put(':itemId')
   @UseGuards(AuthGuard, AdminGuard())
   @ApiBearerAuth('bearer')
-  async update(@Param('itemId') itemId: string, @Body() body: UpdateInventoryDto) {
-    return this.inventory.update(itemId, body);
+  async update(@CurrentTenant() tenant: TenantContext, @Param('itemId') itemId: string, @Body() body: UpdateInventoryDto) {
+    return this.inventory.update(tenant.id, itemId, body);
   }
 
   @Delete(':itemId')
   @UseGuards(AuthGuard, AdminGuard())
   @ApiBearerAuth('bearer')
-  async remove(@Param('itemId') itemId: string) {
-    return this.inventory.remove(itemId);
+  async remove(@CurrentTenant() tenant: TenantContext, @Param('itemId') itemId: string) {
+    return this.inventory.remove(tenant.id, itemId);
   }
 }
