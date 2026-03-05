@@ -7,6 +7,7 @@ import Stripe from 'stripe';
 import bcrypt from 'bcryptjs';
 import { CreateRestaurantDto, CreateRestaurantLocationDto } from './dto/create-restaurant.dto';
 import { UpdateBusinessDto } from './dto/update-business.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class PlatformService {
@@ -16,6 +17,7 @@ export class PlatformService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     private readonly auth: AuthService,
+    private readonly notifications: NotificationsService,
   ) {
     this.stripe = new Stripe(this.config.get<string>('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
@@ -141,6 +143,12 @@ export class PlatformService {
 
     const tenant = await this.getRestaurant(createdTenantId);
     if (!ownerContext) return tenant;
+
+    await this.notifications.sendOwnerWelcome({
+      tenantId: createdTenantId,
+      to: ownerContext.email,
+      ownerEmail: ownerContext.email,
+    });
 
     const token = this.auth.signToken({
       sub: ownerContext.userId,

@@ -27,6 +27,7 @@ test('webhook idempotency returns false on duplicate provider+event_id', async (
     prisma,
     {} as any,
     {} as any,
+    {} as any,
   );
 
   const first = await (controller as any).markProcessed('stripe', 'evt_1', 'tenant_a');

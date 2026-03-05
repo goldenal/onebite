@@ -39,7 +39,7 @@ export class DeliveryQuoteDto {
   @IsString()
   location_id!: string;
 
-  @ApiPropertyOptional({ example: 'uber_direct' })
+  @ApiPropertyOptional({ example: 'nash' })
   @IsOptional()
   @IsString()
   provider?: string;

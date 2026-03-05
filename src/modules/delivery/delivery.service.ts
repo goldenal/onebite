@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   HttpException,
+  HttpStatus,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -11,22 +12,37 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { DeliveryRequestDto } from './dto/delivery-request.dto';
 import { DeliveryWebhookDto } from './dto/delivery-webhook.dto';
 import { DeliveryQuoteDto } from './dto/delivery-quote.dto';
-import { UberDirectService } from './uber-direct.service';
+import { NashService } from './nash.service';
+import { mapPrismaError } from '../../common/errors/prisma-error';
 
 @Injectable()
 export class DeliveryService {
   private readonly logger = new Logger(DeliveryService.name);
 
-  constructor(private readonly prisma: PrismaService, private readonly uber: UberDirectService) {}
+  constructor(private readonly prisma: PrismaService, private readonly nash: NashService) {}
 
   private handleError(error: unknown, context: string, fallbackMessage: string): never {
     if (error instanceof HttpException) throw error;
+    const prismaError = mapPrismaError(error);
+    if (prismaError) {
+      throw new HttpException(
+        {
+          code: prismaError.code,
+          message: prismaError.message,
+          details: prismaError.details,
+        },
+        prismaError.statusCode,
+      );
+    }
 
     this.logger.error(
       `${context} failed: ${error instanceof Error ? error.message : String(error)}`,
       error instanceof Error ? error.stack : undefined,
     );
-    throw new InternalServerErrorException(fallbackMessage);
+    throw new InternalServerErrorException({
+      code: HttpStatus[HttpStatus.INTERNAL_SERVER_ERROR],
+      message: fallbackMessage,
+    });
   }
 
   async request(tenantId: string, dto: DeliveryRequestDto) {
@@ -61,49 +77,73 @@ export class DeliveryService {
   async quote(tenantId: string, dto: DeliveryQuoteDto) {
     try {
       const orderId = dto.order_id?.trim() || null;
-      const provider = dto.provider || 'uber_direct';
-      if (provider !== 'uber_direct') throw new BadRequestException('unsupported_provider');
+      const provider = 'nash';
+      let payment: { subtotalCents?: number | null; amount?: unknown; customerPhone?: string | null; fulfillment?: string | null } | null = null;
+      if (dto.provider && dto.provider !== 'nash') {
+        this.logger.warn(`Ignoring unsupported delivery provider "${dto.provider}" and defaulting to nash`);
+      }
 
       if (orderId) {
-        const payment = await this.prisma.paymentLink.findFirst({ where: { orderId, tenantId } });
+        payment = await this.prisma.paymentLink.findFirst({
+          where: { orderId, tenantId },
+          select: { subtotalCents: true, amount: true, customerPhone: true, fulfillment: true },
+        });
         if (!payment) throw new NotFoundException('order_not_found');
         if (payment.fulfillment !== 'delivery') throw new BadRequestException('not_delivery');
       }
 
       const location = await this.prisma.location.findFirst({ where: { id: dto.location_id, tenantId } });
       if (!location) throw new NotFoundException('location_not_found');
+      const pickupPhoneNumber = String(location.phone || '').trim();
+      if (!pickupPhoneNumber) throw new BadRequestException('pickup_phone_required');
 
-      const pickup = this.uber.toUberAddress({
-        address_line1: location.addressLine1,
-        address_line2: location.addressLine2 || undefined,
-        city: location.city,
-        state: location.state,
-        postal_code: location.postalCode,
-        country: location.country,
-      });
-      const dropoff = this.uber.toUberAddress(dto.dropoff_address);
-      let quote: any;
+      const dropoffPhoneNumber = String(dto.dropoff_phone || payment?.customerPhone || '').trim();
+      if (!dropoffPhoneNumber) throw new BadRequestException('dropoff_phone_required');
+
+      const subtotalCents = Number(payment?.subtotalCents);
+      const amountCents = Math.round(Number(payment?.amount || 0) * 100);
+      const valueCents = Number.isFinite(subtotalCents) && subtotalCents > 0 ? subtotalCents : amountCents > 0 ? amountCents : undefined;
+
+      let quoteResponse: any;
+      let cheapest: { quote: any; quoteId: string; feeCents: number; currency: string; eta: string | null; expiresAt: Date | null };
       try {
-        quote = await this.uber.createQuote({ pickup, dropoff });
+        quoteResponse = await this.nash.createQuote({
+          externalId: orderId || undefined,
+          pickupAddress: {
+            address_line1: location.addressLine1,
+            address_line2: location.addressLine2 || undefined,
+            city: location.city,
+            state: location.state,
+            postal_code: location.postalCode,
+            country: location.country,
+          },
+          dropoffAddress: dto.dropoff_address,
+          pickupBusinessName: location.name,
+          pickupPhoneNumber,
+          dropoffName: dto.dropoff_name,
+          dropoffPhoneNumber,
+          dropoffInstructions: dto.dropoff_instructions,
+          valueCents,
+        });
+        cheapest = this.nash.selectCheapestQuote(quoteResponse);
       } catch (error) {
         const providerMessage = error instanceof Error ? error.message : String(error);
         this.logger.error(`quote provider error: ${providerMessage}`, error instanceof Error ? error.stack : undefined);
         throw new BadGatewayException({
-          code: 'uber_quote_failed',
+          code: 'nash_quote_failed',
           message: 'quote_failed',
           details: {
-            provider: 'uber_direct',
+            provider: 'nash',
             provider_error: providerMessage,
           },
         });
       }
 
-      const quoteId = String(quote.id || quote.quote_id || '');
-      const feeAmount = Number(quote.fee?.amount ?? quote.fee?.value ?? quote.fee ?? 0);
-      const currency = String(quote.fee?.currency_code || quote.fee?.currency || quote.currency || 'USD');
-      const eta = quote.dropoff_eta || quote.eta || null;
-      const expiresAt = quote.expires_at ? new Date(quote.expires_at) : null;
-
+      const quoteId = cheapest.quoteId;
+      const feeCents = Math.max(0, Math.round(cheapest.feeCents));
+      const currency = cheapest.currency;
+      const eta = cheapest.eta;
+      const expiresAt = cheapest.expiresAt;
       if (!quoteId) throw new BadRequestException('quote_failed');
 
       if (orderId) {
@@ -147,11 +187,14 @@ export class DeliveryService {
               provider,
               locationId: dto.location_id,
               quoteId,
-              feeCents: Math.max(0, Math.round(feeAmount)),
+              feeCents,
               currency,
               eta,
               expiresAt: expiresAt ?? null,
-              raw: quote ?? {},
+              raw: {
+                quote_response: quoteResponse ?? {},
+                selected_quote: cheapest.quote ?? {},
+              },
               updatedAt: new Date(),
             },
             create: {
@@ -160,11 +203,14 @@ export class DeliveryService {
               provider,
               locationId: dto.location_id,
               quoteId,
-              feeCents: Math.max(0, Math.round(feeAmount)),
+              feeCents,
               currency,
               eta,
               expiresAt: expiresAt ?? null,
-              raw: quote ?? {},
+              raw: {
+                quote_response: quoteResponse ?? {},
+                selected_quote: cheapest.quote ?? {},
+              },
             },
           });
         });
@@ -173,7 +219,7 @@ export class DeliveryService {
       return {
         order_id: orderId,
         quote_id: quoteId,
-        fee_cents: Math.max(0, Math.round(feeAmount)),
+        fee_cents: feeCents,
         currency,
         eta,
         expires_at: expiresAt ? expiresAt.toISOString() : null,
@@ -193,62 +239,33 @@ export class DeliveryService {
       const quote = await this.prisma.deliveryQuote.findFirst({ where: { orderId, tenantId } });
       const address = await this.prisma.deliveryAddress.findFirst({ where: { orderId, tenantId } });
       if (!quote || !address) throw new NotFoundException('delivery_quote_not_found');
-      if (quote.provider !== 'uber_direct') return null;
+      if (quote.provider !== 'nash') return null;
 
       const location = await this.prisma.location.findFirst({ where: { id: quote.locationId, tenantId } });
       if (!location) throw new NotFoundException('location_not_found');
 
-      const dropoffName = address.name || payment.customerName || 'Customer';
       const dropoffPhone = address.phone || payment.customerPhone || '';
       if (!dropoffPhone) throw new BadRequestException('dropoff_phone_required');
 
-      const pickup = this.uber.toUberAddress({
-        address_line1: location.addressLine1,
-        address_line2: location.addressLine2 || undefined,
-        city: location.city,
-        state: location.state,
-        postal_code: location.postalCode,
-        country: location.country,
-      });
-      const dropoff = this.uber.toUberAddress({
-        address_line1: address.addressLine1,
-        address_line2: address.addressLine2 || undefined,
-        city: address.city,
-        state: address.state,
-        postal_code: address.postalCode,
-        country: address.country,
+      const quoteRaw = (quote.raw as Record<string, any> | null) || {};
+      const quoteResponse = quoteRaw.quote_response || quoteRaw;
+      const nashOrderId = this.nash.extractOrderId(quoteResponse) || undefined;
+
+      const delivery = await this.nash.selectQuote({
+        quoteId: quote.quoteId,
+        orderId: nashOrderId,
       });
 
-      const manifestItems = Array.isArray(payment.items)
-        ? (payment.items as any).map((item: any) => ({
-            name: item?.menuItem?.name || item?.name || 'Item',
-            quantity: Number(item?.quantity || item?.qty || 1),
-            size: 'M',
-            price: item?.menuItem?.price ? Math.round(Number(item.menuItem.price) * 100) : undefined,
-          }))
-        : [{ name: 'Order', quantity: 1, size: 'M' }];
-
-      const delivery = await this.uber.createDelivery({
-        quote_id: quote.quoteId,
-        pickup_name: location.name,
-        pickup_phone_number: location.phone,
-        pickup_address: pickup,
-        dropoff_name: dropoffName,
-        dropoff_phone_number: dropoffPhone,
-        dropoff_address: dropoff,
-        manifest_items: manifestItems,
-        dropoff_notes: address.instructions || undefined,
-      });
-
-      const deliveryId = String(delivery.id || delivery.delivery_id || '');
-      const status = String(delivery.status || 'pending');
-      const eta = delivery.dropoff_eta || delivery.eta || null;
+      const normalized = this.nash.extractDeliveryResult(delivery);
+      const deliveryId = normalized.deliveryId;
+      const status = normalized.status;
+      const eta = normalized.eta;
 
       await this.prisma.deliveryRequest.upsert({
         where: { orderId },
         update: {
           tenantId,
-          provider: 'uber_direct',
+          provider: 'nash',
           deliveryId: deliveryId || null,
           status,
           eta,
@@ -257,7 +274,7 @@ export class DeliveryService {
         create: {
           orderId,
           tenantId,
-          provider: 'uber_direct',
+          provider: 'nash',
           deliveryId: deliveryId || null,
           status,
           eta,

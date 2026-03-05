@@ -10,6 +10,7 @@ import { createHmac, randomUUID } from 'crypto';
 import { DeliveryService } from '../delivery/delivery.service';
 import { createErrorEnvelope } from '../../common/errors/error-response';
 import { PlatformService } from '../platform/platform.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @ApiTags('webhooks')
 @Controller('webhooks')
@@ -23,6 +24,7 @@ export class WebhooksController {
     private readonly prisma: PrismaService,
     private readonly delivery: DeliveryService,
     private readonly platform: PlatformService,
+    private readonly notifications: NotificationsService,
   ) {
     this.stripe = new Stripe(this.config.get<string>('STRIPE_SECRET_KEY') || '', {
       apiVersion: '2023-10-16',
@@ -150,6 +152,27 @@ export class WebhooksController {
         });
       });
 
+      const customerContact = await this.resolveCustomerContact({
+        tenantId,
+        userId: payment.userId,
+        fallbackEmail: metadata.customer_email || null,
+        fallbackName: payment.customerName || metadata.customer_name || null,
+      });
+      if (customerContact.email) {
+        await this.notifications.sendOrderPaymentReceipt({
+          tenantId,
+          to: customerContact.email,
+          customerName: customerContact.name,
+          orderId: id,
+          amountCents: this.toCents(payment.amount),
+          subtotalCents: payment.subtotalCents || 0,
+          taxCents: payment.taxCents || 0,
+          deliveryFeeCents: payment.deliveryFeeCents || 0,
+          fulfillment: payment.fulfillment || fulfillment,
+          items: this.toReceiptItems(rawItems),
+        });
+      }
+
       void this.kitchen.broadcastOrdersSnapshot(tenantId);
       if (fulfillment === 'delivery') {
         this.enqueueDeliveryCreation(tenantId, id);
@@ -196,13 +219,10 @@ export class WebhooksController {
 
   @Post('delivery')
   async deliveryWebhook(@Req() req: Request, @Res() res: Response) {
-    const uberSignature =
-      (req.headers['x-uber-signature'] as string | undefined) ||
-      (req.headers['x-postmates-signature'] as string | undefined) ||
-      undefined;
+    const providerSignature = (req.headers['x-nash-signature'] as string | undefined) || undefined;
 
-    if (uberSignature) {
-      const secret = this.config.get<string>('UBER_DIRECT_WEBHOOK_SECRET');
+    if (providerSignature) {
+      const secret = this.config.get<string>('NASH_WEBHOOK_SECRET');
       if (!secret) {
         return res
           .status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -210,7 +230,7 @@ export class WebhooksController {
             createErrorEnvelope({
               statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
               code: 'server_not_configured',
-              message: 'uber_direct_webhook_secret_required',
+              message: 'nash_webhook_secret_required',
               path: req.url,
             }),
           );
@@ -224,7 +244,7 @@ export class WebhooksController {
       }
 
       const computed = createHmac('sha256', secret).update(rawBody).digest('hex');
-      if (computed !== uberSignature) {
+      if (computed !== providerSignature) {
         return res
           .status(HttpStatus.BAD_REQUEST)
           .json(createErrorEnvelope({ statusCode: HttpStatus.BAD_REQUEST, code: 'invalid_signature', path: req.url }));
@@ -232,10 +252,17 @@ export class WebhooksController {
 
       const payload: any = req.body || {};
       const data = payload.data || payload;
-      const deliveryId = data.delivery_id || data.id || payload.delivery_id;
-      let orderId = data.external_id || data.order_id || payload.order_id || payload.order_ref;
-      const status = data.status || payload.status;
-      const eta = data.dropoff_eta || data.eta || null;
+      const deliveryId = data.deliveryId || data.delivery_id || data.id || payload.deliveryId || payload.delivery_id;
+      let orderId =
+        data.externalId ||
+        data.external_id ||
+        data.orderId ||
+        data.order_id ||
+        payload.orderId ||
+        payload.order_id ||
+        payload.order_ref;
+      const status = data.status || data.delivery_status || data.event || payload.status || payload.event;
+      const eta = data.dropoffEta || data.dropoff_eta || data.eta || payload.eta || null;
 
       let tenantId: string | undefined;
       if (!orderId && deliveryId) {
@@ -255,11 +282,12 @@ export class WebhooksController {
           .json(createErrorEnvelope({ statusCode: HttpStatus.BAD_REQUEST, code: 'bad_request', path: req.url }));
       }
 
+      const previous = await this.prisma.deliveryRequest.findFirst({ where: { orderId }, select: { status: true } });
       await this.prisma.deliveryRequest.upsert({
         where: { orderId },
         update: {
           tenantId,
-          provider: 'uber_direct',
+          provider: 'nash',
           deliveryId: deliveryId || null,
           status,
           eta,
@@ -268,20 +296,24 @@ export class WebhooksController {
         create: {
           orderId,
           tenantId,
-          provider: 'uber_direct',
+          provider: 'nash',
           deliveryId: deliveryId || null,
           status,
           eta,
         },
       });
 
-      const event = this.mapUberStatusToEvent(status);
+      const event = this.mapDeliveryStatusToEvent(status);
       if (event) {
         await this.kitchen.updateDelivery(tenantId, orderId, event, {
           status,
           eta,
           courier: data.courier || null,
         });
+      }
+
+      if ((previous?.status || null) !== status) {
+        await this.sendDeliveryStatusEmail(tenantId, orderId, status, eta);
       }
       return res.json({ ok: true });
     }
@@ -313,15 +345,60 @@ export class WebhooksController {
         .json(createErrorEnvelope({ statusCode: HttpStatus.BAD_REQUEST, code: 'bad_request', path: req.url }));
     }
 
+    const currentStatus = payload.driver_status?.name || payload.event;
+    const previous = await this.prisma.deliveryRequest.findFirst({
+      where: { orderId: payload.order_ref },
+      select: { status: true },
+    });
+    await this.prisma.deliveryRequest.upsert({
+      where: { orderId: payload.order_ref },
+      update: {
+        tenantId: payment.tenantId,
+        provider: payload.provider || 'generic',
+        deliveryId: payload.driver_status?.external_id || null,
+        status: currentStatus,
+        eta: payload.driver_status?.eta_minutes ? `${payload.driver_status.eta_minutes} minutes` : null,
+        updatedAt: new Date(),
+      },
+      create: {
+        orderId: payload.order_ref,
+        tenantId: payment.tenantId,
+        provider: payload.provider || 'generic',
+        deliveryId: payload.driver_status?.external_id || null,
+        status: currentStatus,
+        eta: payload.driver_status?.eta_minutes ? `${payload.driver_status.eta_minutes} minutes` : null,
+      },
+    });
+
     await this.kitchen.updateDelivery(payment.tenantId, payload.order_ref, payload.event, payload.driver_status);
+    if ((previous?.status || null) !== currentStatus) {
+      await this.sendDeliveryStatusEmail(
+        payment.tenantId,
+        payload.order_ref,
+        currentStatus,
+        payload.driver_status?.eta_minutes ? `${payload.driver_status.eta_minutes} minutes` : null,
+      );
+    }
     return res.json({ ok: true });
   }
 
-  private mapUberStatusToEvent(status: string) {
+  private mapDeliveryStatusToEvent(status: string) {
     const normalized = status.toLowerCase();
-    if (['pickup', 'pickup_complete', 'enroute_to_dropoff', 'dropoff'].includes(normalized)) return 'picked_up';
-    if (['delivered', 'dropoff_complete'].includes(normalized)) return 'delivered';
-    if (['canceled', 'cancelled', 'returned'].includes(normalized)) return 'canceled';
+    if (
+      [
+        'pickup',
+        'pickup_complete',
+        'courier_picked_up',
+        'enroute_to_dropoff',
+        'on_the_way',
+        'in_transit',
+        'dropoff',
+      ].includes(normalized)
+    ) {
+      return 'picked_up';
+    }
+    if (['delivered', 'dropoff_complete', 'complete', 'completed'].includes(normalized)) return 'delivered';
+    if (['canceled', 'cancelled', 'returned', 'failed', 'undeliverable'].includes(normalized)) return 'canceled';
     return null;
   }
 
@@ -350,6 +427,75 @@ export class WebhooksController {
         };
       })
       .filter(Boolean);
+  }
+
+  private toCents(value: unknown) {
+    const numeric = Number(value || 0);
+    if (!Number.isFinite(numeric)) return 0;
+    return Math.max(0, Math.round(numeric * 100));
+  }
+
+  private toReceiptItems(items: any[]) {
+    if (!Array.isArray(items)) return [];
+    return items
+      .map((item: any) => {
+        const name = String(item?.menuItem?.name || item?.name || '').trim();
+        const quantity = Number(item?.quantity ?? item?.qty ?? 1);
+        if (!name || !Number.isFinite(quantity) || quantity <= 0) return null;
+        const unitPrice = Number(item?.menuItem?.price ?? item?.price);
+        return {
+          name,
+          quantity: Math.floor(quantity),
+          unitPriceCents: Number.isFinite(unitPrice) ? Math.round(unitPrice * 100) : null,
+        };
+      })
+      .filter(Boolean) as Array<{ name: string; quantity: number; unitPriceCents?: number | null }>;
+  }
+
+  private async resolveCustomerContact(input: {
+    tenantId: string;
+    userId?: string | null;
+    fallbackEmail?: string | null;
+    fallbackName?: string | null;
+  }) {
+    const fallbackEmail = input.fallbackEmail?.toLowerCase().trim();
+    if (fallbackEmail && fallbackEmail.includes('@')) {
+      return { email: fallbackEmail, name: input.fallbackName || null };
+    }
+    if (!input.userId) return { email: null, name: input.fallbackName || null };
+
+    const account = await this.prisma.customerAccount.findFirst({
+      where: { id: input.userId, tenantId: input.tenantId },
+      select: { email: true, firstName: true, lastName: true },
+    });
+    if (!account?.email) return { email: null, name: input.fallbackName || null };
+
+    const name = [account.firstName, account.lastName].filter(Boolean).join(' ').trim() || input.fallbackName || null;
+    return { email: account.email.toLowerCase().trim(), name };
+  }
+
+  private async sendDeliveryStatusEmail(tenantId: string, orderId: string, status: string, eta?: string | null) {
+    const payment = await this.prisma.paymentLink.findFirst({
+      where: { orderId, tenantId },
+      select: { userId: true, customerName: true },
+    });
+    if (!payment) return;
+
+    const contact = await this.resolveCustomerContact({
+      tenantId,
+      userId: payment.userId,
+      fallbackName: payment.customerName || null,
+    });
+    if (!contact.email) return;
+
+    await this.notifications.sendDeliveryStatusUpdated({
+      tenantId,
+      to: contact.email,
+      customerName: contact.name,
+      orderId,
+      status,
+      eta: eta || null,
+    });
   }
 
   private enqueueDeliveryCreation(tenantId: string, orderId: string) {

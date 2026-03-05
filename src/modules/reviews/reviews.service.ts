@@ -5,22 +5,15 @@ import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { CreateReplyDto, CreatePublicReplyDto, MarkReadDto, MyReviewsDto, RequestAccessDto } from './dto/reply.dto';
 import { randomUUID, createHash } from 'crypto';
-import nodemailer from 'nodemailer';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ReviewsService {
-  private mailer: nodemailer.Transporter | null = null;
-
-  constructor(private readonly prisma: PrismaService, private readonly config: ConfigService) {
-    const user = this.config.get<string>('GMAIL_USER');
-    const pass = this.config.get<string>('GMAIL_APP_PASSWORD');
-    if (user && pass) {
-      this.mailer = nodemailer.createTransport({
-        service: 'gmail',
-        auth: { user, pass },
-      });
-    }
-  }
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private toReview(r: any) {
     return {
@@ -102,16 +95,16 @@ export class ReviewsService {
   }
 
   async sendReplyNotification(tenantId: string, email: string, name: string, reviewId: string, message: string) {
-    if (!this.mailer) return;
     const access = await this.issueReviewAccessToken(tenantId, email);
     const link = `${this.customerUrl()}/reviews/conversation?email=${encodeURIComponent(email)}&token=${encodeURIComponent(
       access.token,
     )}`;
-    await this.mailer.sendMail({
-      from: this.config.get<string>('GMAIL_USER'),
+    await this.notifications.sendReviewAdminReply({
+      tenantId,
       to: email,
-      subject: 'Bite Creole Kitchen - Response to Your Review',
-      html: `<p>Dear ${name},</p><p>We responded to your review:</p><blockquote>${message}</blockquote><p><a href="${link}">View Conversation</a></p>`,
+      customerName: name || 'Customer',
+      adminMessage: message,
+      conversationLink: link,
     });
   }
 
@@ -419,24 +412,20 @@ export class ReviewsService {
     const link = `${this.customerUrl()}/reviews/conversation?email=${encodeURIComponent(email)}&token=${encodeURIComponent(
       access.token,
     )}`;
-
-    if (this.mailer) {
-      await this.mailer.sendMail({
-        from: this.config.get<string>('GMAIL_USER'),
-        to: email,
-        subject: 'Bite Creole Kitchen - Review Access',
-        html: `<p>Use this link to view your review conversation:</p><p><a href="${link}">View Conversation</a></p>`,
-      });
-    }
+    const deliveryResult = await this.notifications.sendReviewAccessLink({
+      tenantId,
+      to: email,
+      conversationLink: link,
+    });
 
     const payload: {
       success: boolean;
       delivery: string;
       accessToken?: string;
       expiresAt?: string;
-    } = { success: true, delivery: this.mailer ? 'email' : 'console' };
+    } = { success: true, delivery: deliveryResult.delivered ? 'email' : 'console' };
 
-    if (this.reviewTokenReturn() || !this.mailer) {
+    if (this.reviewTokenReturn() || !deliveryResult.delivered) {
       payload.accessToken = access.token;
       payload.expiresAt = access.expiresAt;
     }

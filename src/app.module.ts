@@ -18,8 +18,6 @@ import { KitchenModule } from './modules/kitchen/kitchen.module';
 import { AgentModule } from './modules/agent/agent.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { TabletModule } from './modules/tablet/tablet.module';
-import { ChatModule } from './modules/chat/chat.module';
-import { VoiceModule } from './modules/voice/voice.module';
 import { LocationsModule } from './modules/locations/locations.module';
 import { LogBodyInterceptor } from './common/interceptors/log-body.interceptor';
 import { APP_INTERCEPTOR } from '@nestjs/core';
@@ -90,8 +88,6 @@ const prettyTarget = (() => {
     AgentModule,
     WebhooksModule,
     TabletModule,
-    ChatModule,
-    VoiceModule,
     PublicModule,
     CustomersModule,
     PlatformModule,

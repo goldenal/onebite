@@ -12,7 +12,7 @@
     "format": "prettier --write .",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "test": "node --test -r ts-node/register test/**/*.test.ts"
+    "test": "node --test -r ts-node/register test/*.test.ts"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.8",
@@ -26,11 +26,11 @@
     "class-validator": "^0.14.1",
     "jsonwebtoken": "^9.0.2",
     "nestjs-pino": "^4.1.0",
-    "nodemailer": "^7.0.12",
     "pino": "^9.4.0",
     "pino-http": "^9.0.0",
     "pino-pretty": "^11.2.0",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.9.3",
     "rxjs": "^7.8.1",
     "stripe": "^14.25.0",
     "zod": "^3.23.8"
@@ -41,7 +41,6 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.6",
     "@types/node": "^20.11.30",
-    "@types/nodemailer": "^6.4.17",
     "@typescript-eslint/eslint-plugin": "^8.1.0",
     "@typescript-eslint/parser": "^8.1.0",
     "eslint": "^9.8.0",

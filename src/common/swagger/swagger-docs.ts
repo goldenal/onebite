@@ -1057,7 +1057,7 @@ function templateForPath(method: HttpMethod, path: string): OperationTemplate {
       return {
         summary: 'Create delivery request',
         description: 'Creates a delivery provider request for a paid tenant order.',
-        example: { order_id: 'ord_1', provider: 'uber_direct', status: 'created' },
+        example: { order_id: 'ord_1', provider: 'nash', status: 'created' },
       };
     }
     if (path === '/api/delivery/quote' && method === 'post') {
@@ -1123,23 +1123,6 @@ function templateForPath(method: HttpMethod, path: string): OperationTemplate {
     }
   }
 
-  if (path.startsWith('/api/chat')) {
-    if (path === '/api/chat' && method === 'post') {
-      return {
-        summary: 'Chat with assistant',
-        description: 'Processes tenant-aware chat request for tablet/customer assistant flow.',
-        example: { reply: 'Today we have jerk chicken and curry goat specials.', sessionId: 'sess_1' },
-      };
-    }
-    if (path === '/api/chat/reset' && method === 'post') {
-      return {
-        summary: 'Reset chat session',
-        description: 'Resets tenant chat context for a tablet session.',
-        example: { success: true, reset: true },
-      };
-    }
-  }
-
   if (path.startsWith('/api/agent')) {
     if (path === '/api/agent/confirm_payment' && method === 'post') {
       return {
@@ -1155,15 +1138,6 @@ function templateForPath(method: HttpMethod, path: string): OperationTemplate {
         example: { order_id: 'ord_1', pickup_code: '4829' },
       };
     }
-  }
-
-  if (path.startsWith('/api/voice/tts') && method === 'post') {
-    return {
-      summary: 'Text to speech',
-      description: 'Voice synthesis endpoint placeholder (returns service unavailable until provider is configured).',
-      example: { statusCode: 503, code: 'elevenlabs_not_configured', message: 'Service Unavailable' },
-      statusCode: '503',
-    };
   }
 
   if (path.startsWith('/api/orders')) {

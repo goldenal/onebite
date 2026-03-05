@@ -3,10 +3,14 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import { UpdateReservationDto } from './dto/update-reservation.dto';
 import { randomUUID } from 'crypto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ReservationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   async list(tenantId: string) {
     const rows = await this.prisma.reservation.findMany({
@@ -66,6 +70,17 @@ export class ReservationsService {
         createdAt,
       },
     });
+
+    await this.notifications.sendReservationCreated({
+      tenantId,
+      to: dto.email,
+      customerName: dto.name,
+      guests: dto.guests,
+      date: dto.date,
+      time: dto.time,
+      specialRequests: dto.specialRequests ?? null,
+    });
+
     return { id, ...dto, status: 'pending', createdAt: Number(createdAt) };
   }
 
@@ -84,6 +99,21 @@ export class ReservationsService {
     if (!updatedRows.count) throw new NotFoundException('Reservation not found');
     const updated = await this.prisma.reservation.findFirst({ where: { id, tenantId } });
     if (!updated) throw new NotFoundException('Reservation not found');
+
+    const previousStatus = (existing.status || 'pending').trim();
+    const nextStatus = (updated.status || 'pending').trim();
+    if (previousStatus !== nextStatus) {
+      await this.notifications.sendReservationStatusUpdated({
+        tenantId,
+        to: updated.email,
+        customerName: updated.name,
+        guests: updated.guests,
+        date: updated.date,
+        time: updated.time,
+        status: nextStatus,
+        notes: updated.notes ?? null,
+      });
+    }
 
     return {
       id: updated.id,

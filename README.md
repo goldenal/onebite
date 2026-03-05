@@ -6,7 +6,7 @@ Multi-tenant SaaS backend for restaurant operations.
 - NestJS
 - Prisma + PostgreSQL
 - Stripe Checkout + Stripe Connect
-- Uber Direct delivery integration
+- Nash delivery integration
 
 ## Run
 ```bash

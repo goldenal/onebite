@@ -23,7 +23,7 @@ test('PlatformService.connectStatus refreshes Stripe status and updates DB', asy
     get: (key: string) => (key === 'STRIPE_SECRET_KEY' ? 'sk_test_123' : undefined),
   } as any;
 
-  const service = new PlatformService(prisma, config, {} as any);
+  const service = new PlatformService(prisma, config, {} as any, {} as any);
   (service as any).stripe = {
     accounts: {
       retrieve: async () => ({
@@ -63,7 +63,7 @@ test('PlatformService.connectStatus falls back to DB row when Stripe refresh fai
     get: (key: string) => (key === 'STRIPE_SECRET_KEY' ? 'sk_test_123' : undefined),
   } as any;
 
-  const service = new PlatformService(prisma, config, {} as any);
+  const service = new PlatformService(prisma, config, {} as any, {} as any);
   (service as any).stripe = {
     accounts: {
       retrieve: async () => {

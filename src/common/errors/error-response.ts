@@ -10,20 +10,22 @@ export type ErrorEnvelope = {
   timestamp: string;
 };
 
-function normalizeToken(value: string) {
+function humanizeText(value: string) {
   const normalized = value
     .trim()
     .toLowerCase()
     .replace(/['"`]/g, '')
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-  return normalized || 'unknown_error';
+    .replace(/[_-]+/g, ' ')
+    .replace(/[^a-z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return normalized || 'unknown error';
 }
 
 function statusCodeToken(status: number) {
   const label = (HttpStatus as Record<number, string>)[status];
-  if (typeof label === 'string' && label) return normalizeToken(label);
-  return 'internal_server_error';
+  if (typeof label === 'string' && label) return humanizeText(label);
+  return 'internal server error';
 }
 
 function hasDetails(value: unknown) {
@@ -38,8 +40,8 @@ export function createErrorEnvelope(input: {
   details?: unknown;
 }): ErrorEnvelope {
   const fallback = statusCodeToken(input.statusCode);
-  const code = normalizeToken(input.code || input.message || fallback);
-  const message = normalizeToken(input.message || input.code || fallback);
+  const code = humanizeText(input.code || input.message || fallback);
+  const message = humanizeText(input.message || input.code || fallback);
   const envelope: ErrorEnvelope = {
     success: false,
     statusCode: input.statusCode,

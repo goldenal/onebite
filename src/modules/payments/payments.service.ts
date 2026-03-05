@@ -38,6 +38,12 @@ export class PaymentsService {
     return Number(this.config.get<string>('CHECKOUT_TAX_BPS') || 0);
   }
 
+  private checkoutQuoteExpiryGraceMs() {
+    const parsed = Number(this.config.get<string>('CHECKOUT_QUOTE_EXPIRY_GRACE_MS') || 60000);
+    if (!Number.isFinite(parsed)) return 60000;
+    return Math.max(0, Math.round(parsed));
+  }
+
   private async fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
@@ -490,6 +496,16 @@ export class PaymentsService {
       throw new ForbiddenException('stripe_connect_not_ready');
     }
 
+    const customerAccount = payment.userId
+      ? await this.prisma.customerAccount.findFirst({
+          where: { id: payment.userId, tenantId },
+          select: { email: true, firstName: true, lastName: true },
+        })
+      : null;
+    const resolvedCustomerName =
+      payment.customerName || [customerAccount?.firstName, customerAccount?.lastName].filter(Boolean).join(' ').trim() || '';
+    const resolvedCustomerEmail = customerAccount?.email || '';
+
     const rawItems = this.normalizeRawItems(payment.items);
     const resolvedItems = await this.resolveMenuPricedItems(tenantId, rawItems);
     if (!resolvedItems.length) throw new BadRequestException('items_required');
@@ -506,7 +522,9 @@ export class PaymentsService {
       const quote = await this.prisma.deliveryQuote.findFirst({ where: { orderId: dto.order_id, tenantId } });
       if (!quote) throw new BadRequestException('delivery_quote_required');
       if (dto.quote_id && dto.quote_id !== quote.quoteId) throw new BadRequestException('quote_mismatch');
-      if (quote.expiresAt && quote.expiresAt.getTime() < Date.now()) throw new BadRequestException('quote_expired');
+      if (quote.expiresAt && quote.expiresAt.getTime() + this.checkoutQuoteExpiryGraceMs() < Date.now()) {
+        throw new BadRequestException('quote_expired');
+      }
 
       currency = quote.currency ? quote.currency.toLowerCase() : currency;
       lineItems = lineItems.map((li) => ({
@@ -564,7 +582,8 @@ export class PaymentsService {
           tenant_id: tenantId,
           channel: payment.channel || 'web',
           fulfillment: payment.fulfillment || 'pickup',
-          customer_name: payment.customerName || '',
+          customer_name: resolvedCustomerName,
+          customer_email: resolvedCustomerEmail,
           customer_phone: payment.customerPhone || '',
           quote_id: dto.quote_id || '',
           connected_account_id: stripeAccount.connectAccountId,
